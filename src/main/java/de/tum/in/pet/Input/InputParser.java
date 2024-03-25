@@ -51,6 +51,8 @@ public class InputParser {
                 commandLine.getOptionValue(InputOptions.deltaTOption.getLongOpt()), DefaultInputValues.DELTA_T_CALCULATION_METHOD);
         double alpha = parseDoubleOption(commandLine, InputOptions.alphaOption, DefaultInputValues.ALPHA);
 
+        String reachTargetLabel = parseOption(commandLine, InputOptions.reachTarget, "", Function.identity());
+
         return new InputValues(precision,
                 revisitThreshold,
                 maxReward,
@@ -68,7 +70,8 @@ public class InputParser {
                 outputPath,
                 maxSuccessorsInModel,
                 deltaTMethod,
-                alpha);
+                alpha,
+                reachTargetLabel);
     }
 
     private static long parseLongOption(CommandLine commandLine, Option option, long defaultValue) {

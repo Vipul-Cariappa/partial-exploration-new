@@ -175,7 +175,12 @@ public final class MeanPayoffChecker {
           throws PrismException {
 
     MarkovDecisionProcess partialModel = new MarkovDecisionProcess();
-    Generator<State> generator = new MdpGenerator(prismGenerator);
+
+    Generator<State> generator;
+    if (inputValues.reachTargetLabel.isEmpty())
+      generator = new MdpGenerator(prismGenerator, inputValues.reachTargetLabel);
+    else
+      generator = new MdpGenerator(prismGenerator);
 
     RewardGenerator<State> rewardGenerator = new PrismRewardGenerator(rewardIndex, prismGenerator);
 

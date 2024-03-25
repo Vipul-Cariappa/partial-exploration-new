@@ -4,7 +4,7 @@
     <option name="ALTERNATIVE_JRE_PATH_ENABLED" value="true" />
     <option name="MAIN_CLASS_NAME" value="de.tum.in.pet.Main" />
     <module name="partial-exploration.main" />
-    <option name="PROGRAM_PARAMETERS" value="meanPayoff -m data/mdpReachRewardModels/rabin-3/rabin.3-rewards.prism -pMin 0.03125 --informationLevel BLACKBOX --rewardModule live --maxReward 1 --alpha 0.6" />
+    <option name="PROGRAM_PARAMETERS" value="meanPayoff -m data/mdpReachRewardModels/rabin-3/rabin.3-rewards.prism -pMin 0.03125 --informationLevel BLACKBOX --rewardModule live --maxReward 1 --alpha 0.6 --reachTarget target" />
     <option name="VM_PARAMETERS" value="-ea" />
     <method v="2">
       <option name="Make" enabled="true" />

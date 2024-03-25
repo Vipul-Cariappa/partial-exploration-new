@@ -27,6 +27,7 @@ public class InputOptions {
     public static Option maxSuccessorOption = new Option(null, "maxSuccessors", true, "Maximum number of successors in model");
     public static Option deltaTOption = new Option(null, "deltaTMethod", true, "Computation method of Delta T");
     public static Option alphaOption = new Option(null, "alpha", true, "Optimization for whether to explore best action or uncertain action");
+    public static Option reachTarget = new Option(null, "reachTarget", true, "Target state's label");
 
     public static Options getAllInputOptions() {
         modelOption.setRequired(true);
@@ -51,6 +52,7 @@ public class InputOptions {
                 .addOption(outputFile)
                 .addOption(maxSuccessorOption)
                 .addOption(deltaTOption)
-                .addOption(alphaOption);
+                .addOption(alphaOption)
+                .addOption(reachTarget);
     }
 }
