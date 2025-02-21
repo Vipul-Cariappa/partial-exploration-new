@@ -4,12 +4,15 @@ import de.tum.in.naturals.set.NatBitSet;
 import de.tum.in.naturals.set.NatBitSets;
 import de.tum.in.pet.implementation.reachability.BlackUnboundedReachValues;
 import de.tum.in.pet.sampler.UnboundedValues;
+import de.tum.in.pet.util.BettingMartingale;
 import de.tum.in.pet.util.ErrorProbabilityCalculator;
+import de.tum.in.pet.util.VectorDouble;
 import de.tum.in.pet.values.Bounds;
 import de.tum.in.probmodels.explorer.BlackExplorer;
 import de.tum.in.probmodels.explorer.Explorer;
 import de.tum.in.probmodels.generator.RewardGenerator;
 import de.tum.in.probmodels.graph.Mec;
+import de.tum.in.probmodels.model.Action;
 import de.tum.in.probmodels.model.Distribution;
 import de.tum.in.probmodels.model.Model;
 import it.unimi.dsi.fastutil.doubles.Double2LongFunction;
@@ -64,11 +67,74 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
     this.simulateMec = simulateMec;
     this.deltaTCalculationMethod = deltaTCalculationMethod;
     this.maxSuccessorsInModel = maxSuccessorsInModel;
+
+    BlackUnboundedReachValues values_ = (BlackUnboundedReachValues) this.values;
+    BlackExplorer<S, M> explorer_ = (BlackExplorer<S, M>) explorer();
+
+    // Updates the confidenceWidthFunction according to the latest counts and transDelta value. The confidenceWidthFunction
+    // returns the confidenceWidth for a state x and an action with index y. if y is greater than the number of choices
+    // the explorer holds, it must be the stay action. We set confidence width of stay action equal to zero as we
+    // know the probabilities of the action are accurate as they have been calculated and not learned.
+    
+    // BlackExplorer<S, M> explorer_ = (BlackExplorer<S, M>) explorer();
+    // Int2ObjectFunction<Int2DoubleFunction> confidenceWidthFunction = state -> (action -> action < explorer.getChoices(state).size()
+    //         ? Math.sqrt(-Math.log(transDelta)/(2*explorer_.getActionCounts(state, action)))
+    //         : 0);
+
+    Int2ObjectFunction<Int2DoubleFunction> confidenceWidthFunction = state -> (action -> {
+      if (action >= explorer.getChoices(state).size()) {
+        return 0d;
+      }
+      HashMap<Integer, HashMap<Integer, Pair<ArrayList<Integer>, Pair<Double, Double>>>> actionHash = martingaleTransitions.get(state);
+      if (actionHash == null) { return 1d; }
+      HashMap<Integer, Pair<ArrayList<Integer>, Pair<Double, Double>>> nextStateHash = actionHash.get(action);
+      if (nextStateHash == null) { return 1d; }
+
+      double max = Double.NEGATIVE_INFINITY;
+      for (var pair: nextStateHash.entrySet()) {
+        double[] sample = pair.getValue().first.stream().mapToDouble(i -> (double) i).toArray();
+        de.tum.in.pet.util.Pair<Double, Double> valuePair = BettingMartingale.confidence_width(
+                new VectorDouble(sample),
+                100, pair.getValue().second.first, pair.getValue().second.second, 0.05, true, 0.5, 0.5);
+        double value = valuePair.second - valuePair.first;
+        if (max < value) {
+          max = value;
+        }
+        pair.getValue().second.first = valuePair.first;
+        pair.getValue().second.second = valuePair.second;
+      }
+      return max;
+    });
+
+    // Updates the confidence width function in UnboundedReachValues.
+    values_.setConfidenceWidthFunction(confidenceWidthFunction);
   }
 
   @Override
   public Bounds bounds(int state) {
     return values.bounds(state);
+  }
+
+  public HashMap<Integer, HashMap<Integer, HashMap<Integer, Pair<ArrayList<Integer>, Pair<Double, Double>>>>> martingaleTransitions = new HashMap<>();
+  public void updateMartingaleTransitions(int currentState, int actionIndex, int nextState) {
+    // TODO: `action` is `nextActionIndex` from the caller side, therefore we can
+    //       optimise `martingaleTransitions` as (int -> array -> array) instead of (int -> int -> int -> array)
+    martingaleTransitions.putIfAbsent(currentState, new HashMap<>());
+    HashMap<Integer, HashMap<Integer, Pair<ArrayList<Integer>, Pair<Double, Double>>>> actionHash = martingaleTransitions.get(currentState);
+
+    actionHash.putIfAbsent(actionIndex, new HashMap<>());
+    HashMap<Integer, Pair<ArrayList<Integer>, Pair<Double, Double>>> nextStateHash = actionHash.get(actionIndex);
+
+    // Get all possible nextStates
+    explorer.getActions(currentState).get(actionIndex).distribution().forEach((s, d) -> {
+      nextStateHash.putIfAbsent(s, new Pair<>(new ArrayList<>(), new Pair<>(0.0, 1.0)));
+      ArrayList<Integer> distribution = nextStateHash.get(s).first;
+      if (s == nextState) {
+        distribution.add(1);
+      } else {
+        distribution.add(0);
+      }
+    });
   }
 
   @Override
@@ -83,17 +149,6 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
     double k = Math.pow(2, run);
     long nIterations = nSampleFunction.apply(k);
     double errorTolerance = this.errorTolerance;
-
-    // Updates the confidenceWidthFunction according to the latest counts and transDelta value. The confidenceWidthFunction
-    // returns the confidenceWidth for a state x and an action with index y. if y is greater than the number of choices
-    // the explorer holds, it must be the stay action. We set confidence width of stay action equal to zero as we
-    // know the probabilities of the action are accurate as they have been calculated and not learned.
-    Int2ObjectFunction<Int2DoubleFunction> confidenceWidthFunction = x -> (y -> y < explorer.getChoices(x).size()
-            ? Math.sqrt(-Math.log(transDelta)/(2*explorer.getActionCounts(x, y)))
-            : 0);
-
-    // Updates the confidence width function in UnboundedReachValues.
-    values.setConfidenceWidthFunction(confidenceWidthFunction);
 
     for (int i = 0; i < nIterations; i++) {
       IntList visitStack = new IntArrayList();
@@ -163,6 +218,9 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
           // If this action has been sampled enough number of times, we know that it can now be considered as a part of an MEC.
           // Hence, we know that there might be new MECs in the model and it could be worthwhile finding them again.
           seenNewTransitionSignificantly |= explorer.updateCounts(currentState, nextActionIndex, nextState);
+
+          // update distribution to compute martingale
+          updateMartingaleTransitions(currentState, nextActionIndex, nextState);
         }
 
         // This is true when the currentState doesn't have any choices from it, i.e. it is a sink state.
@@ -183,11 +241,6 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
 
     values.resetBounds();
     initSinkStates();
-
-    confidenceWidthFunction = x -> (y -> y < explorer.getChoices(x).size()
-            ? Math.sqrt(-Math.log(transDelta)/(2*explorer.getActionCounts(x, y)))
-            : 0);
-    values.setConfidenceWidthFunction(confidenceWidthFunction);
 
     // the update function is ran until there has been some progress, i.e., the upper bounds of some state have been changed.
     // if there has been change, this change needs to be propagated through the rest of the states.
@@ -337,7 +390,7 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
 
     RestrictedMecBoundedValueIterator<S> valueIterator = new RestrictedMecBoundedValueIterator<>(mec, targetPrecision/2,
             rewardGenerator, stateIndexMap, rMax, timeout);
-    valueIterator.setConfidenceWidthFunction(x -> (y -> Math.sqrt(-Math.log(transDelta)/(2*explorer.getActionCounts(x, y)))));
+
     valueIterator.setDistributionFunction(x -> y -> this.explorer.model().getChoice(x, y));
     valueIterator.setLabelFunction(x -> y -> this.explorer.model().getActions(x).get(y).label());
 
