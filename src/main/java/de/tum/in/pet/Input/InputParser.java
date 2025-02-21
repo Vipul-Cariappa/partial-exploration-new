@@ -2,6 +2,7 @@ package de.tum.in.pet.Input;
 
 import de.tum.in.pet.implementation.meanPayoff.DeltaTCalculationMethod;
 import de.tum.in.pet.implementation.meanPayoff.SimulateMec;
+import de.tum.in.pet.implementation.meanPayoff.TransitionProbabilityMethod;
 import de.tum.in.pet.implementation.reachability.UpdateMethod;
 import de.tum.in.pet.sampler.SuccessorHeuristic;
 import de.tum.in.pet.util.CliHelper;
@@ -18,6 +19,7 @@ public class InputParser {
         Options options = InputOptions.getAllInputOptions();
         CommandLine commandLine = CliHelper.parse(options, args);
 
+        long numberOfTransitions = parseLongOption(commandLine, InputOptions.numberOfTransitions, DefaultInputValues.numberOfTransitions);
         double precision = parseDoubleOption(commandLine, InputOptions.precisionOption, DefaultInputValues.PRECISION);
         int revisitThreshold = parseIntOption(commandLine, InputOptions.revisitThresholdOption, DefaultInputValues.THRESHOLD);
         double maxReward = parseDoubleOption(commandLine, InputOptions.maxRewardOption, DefaultInputValues.REWARD_UPPERBOUND);
@@ -36,6 +38,10 @@ public class InputParser {
 
         UpdateMethod updateMethod = CliHelper.parseUpdateMethod(
                 commandLine.getOptionValue(InputOptions.updateMethodOption.getLongOpt()), DefaultInputValues.UPDATE_METHOD);
+
+        TransitionProbabilityMethod transitionProbabilityMethod = CliHelper.parseTransitionProbabilityMethod(
+                commandLine.getOptionValue(InputOptions.transitionProbabilityMethodOption.getLongOpt()),
+                DefaultInputValues.TRANSITION_PROBABILITY_METHOD);
 
         boolean solveUsingQP = isOptionPresent(commandLine, InputOptions.solveWithQP);
 
@@ -61,12 +67,14 @@ public class InputParser {
                 heuristic,
                 informationLevel,
                 updateMethod,
+                transitionProbabilityMethod,
                 rewardStructure,
                 solveUsingQP,
                 simulateMec,
                 outputPath,
                 maxSuccessorsInModel,
-                deltaTMethod);
+                deltaTMethod,
+                numberOfTransitions);
     }
 
     private static long parseLongOption(CommandLine commandLine, Option option, long defaultValue) {

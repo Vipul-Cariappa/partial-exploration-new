@@ -2,6 +2,7 @@ package de.tum.in.pet.util;
 
 import de.tum.in.pet.implementation.meanPayoff.DeltaTCalculationMethod;
 import de.tum.in.pet.implementation.meanPayoff.SimulateMec;
+import de.tum.in.pet.implementation.meanPayoff.TransitionProbabilityMethod;
 import de.tum.in.pet.implementation.reachability.UpdateMethod;
 import de.tum.in.pet.sampler.SuccessorHeuristic;
 import java.util.Arrays;
@@ -81,6 +82,24 @@ public final class CliHelper {
               .map(Object::toString)
               .collect(Collectors.joining(", "));
       System.out.println("Unknown information level " + optionString + ". Possible values are: " + values);
+      System.exit(1);
+      throw new AssertionError(e);
+    }
+  }
+
+  public static TransitionProbabilityMethod parseTransitionProbabilityMethod(
+          String optionString, TransitionProbabilityMethod defaultValue) {
+    if (optionString == null) {
+      return defaultValue;
+    }
+    try {
+      return TransitionProbabilityMethod.valueOf(optionString);
+    } catch (IllegalArgumentException e) {
+      logger.log(Level.FINE, "Failed to parse transition probability method", e);
+      String values = Arrays.stream(TransitionProbabilityMethod.values())
+              .map(Object::toString)
+              .collect(Collectors.joining(", "));
+      System.out.println("Unknown transition probability method " + optionString + ". Possible values are: " + values);
       System.exit(1);
       throw new AssertionError(e);
     }

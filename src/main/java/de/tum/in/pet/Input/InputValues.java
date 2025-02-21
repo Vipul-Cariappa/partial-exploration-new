@@ -2,11 +2,13 @@ package de.tum.in.pet.Input;
 
 import de.tum.in.pet.implementation.meanPayoff.DeltaTCalculationMethod;
 import de.tum.in.pet.implementation.meanPayoff.SimulateMec;
+import de.tum.in.pet.implementation.meanPayoff.TransitionProbabilityMethod;
 import de.tum.in.pet.implementation.reachability.UpdateMethod;
 import de.tum.in.pet.sampler.SuccessorHeuristic;
 import de.tum.in.probmodels.explorer.InformationLevel;
 
 public class InputValues {
+    public final long numberOfTransitions;
     public final double precision;
     public final int revisitThreshold;
     public final double maxReward;
@@ -18,6 +20,7 @@ public class InputValues {
     public final SuccessorHeuristic successorHeuristic;
     public final InformationLevel informationLevel;
     public final UpdateMethod updateMethod;
+    public final TransitionProbabilityMethod transitionProbabilityMethod;
     public final String rewardStructure;
     public final boolean solveUsingQP;
     public final SimulateMec simulateMec;
@@ -28,8 +31,10 @@ public class InputValues {
 
     public InputValues(double precision, int revisitThreshold, double maxReward, double pMin, double errorTolerance,
                        int iterSamples, long timeout, boolean getErrorProbability, SuccessorHeuristic successorHeuristic,
-                       InformationLevel informationLevel, UpdateMethod updateMethod, String rewardStructure, boolean solveUsingQP,
-                       SimulateMec simulateMec, String outputPath, int maxSuccessorsInModel, DeltaTCalculationMethod deltaTCalculationMethod) {
+                       InformationLevel informationLevel, UpdateMethod updateMethod,
+                       TransitionProbabilityMethod transitionProbabilityMethod, String rewardStructure, boolean solveUsingQP,
+                       SimulateMec simulateMec, String outputPath, int maxSuccessorsInModel, DeltaTCalculationMethod deltaTCalculationMethod,
+                       long numberOfTransitions) {
         this.precision = precision;
         this.revisitThreshold = revisitThreshold;
         this.maxReward = maxReward;
@@ -41,11 +46,13 @@ public class InputValues {
         this.successorHeuristic = successorHeuristic;
         this.informationLevel = informationLevel;
         this.updateMethod = updateMethod;
+        this.transitionProbabilityMethod = transitionProbabilityMethod;
         this.rewardStructure = rewardStructure;
         this.solveUsingQP = solveUsingQP;
         this.simulateMec = simulateMec;
         this.outputPath = outputPath;
         this.maxSuccessorsInModel = maxSuccessorsInModel;
         this.deltaTCalculationMethod = deltaTCalculationMethod;
+        this.numberOfTransitions = numberOfTransitions;
     }
 }

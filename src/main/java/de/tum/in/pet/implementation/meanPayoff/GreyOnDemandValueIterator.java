@@ -17,10 +17,13 @@ public class GreyOnDemandValueIterator<S, M extends Model> extends BlackOnDemand
 
     public GreyOnDemandValueIterator(Explorer<S, M> explorer, UnboundedValues values, RewardGenerator<S> rewardGenerator,
                                      int revisitThreshold, double rMax, double pMin, double errorTolerance,
-                                     Double2LongFunction nSampleFunction, double precision, long timeout, SimulateMec simulateMec,
-                                     DeltaTCalculationMethod deltaTCalculationMethod, int maxSuccessorsInModel) {
+                                     Double2LongFunction nSampleFunction, double precision, long numberOfTransitions, long timeout,
+                                     SimulateMec simulateMec,
+                                     DeltaTCalculationMethod deltaTCalculationMethod, int maxSuccessorsInModel,
+                                     TransitionProbabilityMethod transitionProbabilityMethod) {
         super(explorer, values, rewardGenerator, revisitThreshold, rMax, pMin, errorTolerance, nSampleFunction, precision,
-                timeout, false, simulateMec, deltaTCalculationMethod, maxSuccessorsInModel);
+                numberOfTransitions, timeout, false, simulateMec, deltaTCalculationMethod, maxSuccessorsInModel,
+                transitionProbabilityMethod);
 
         initGreyUnboundedReachValues();
     }

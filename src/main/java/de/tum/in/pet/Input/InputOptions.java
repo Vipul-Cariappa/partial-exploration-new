@@ -6,6 +6,7 @@ import org.apache.commons.cli.Options;
 
 // On adding new option, make sure to add them to getAllInputOptions method
 public class InputOptions {
+    public static Option numberOfTransitions = new Option(null, "numberOfTransitions", true, "Upper bound on total transitions in the model. (Default: 10^7)");
     public static Option precisionOption = new Option(null, "precision", true, "Required precision of the returned value. (Default: 10^{-6})");
     public static Option heuristicOption = CliHelper.getDefaultHeuristicOption();
     public static Option modelOption = new Option("m", "model", true, "Path to model file");
@@ -19,6 +20,7 @@ public class InputOptions {
     public static Option errorToleranceOption = new Option(null, "errorTolerance", true, "Error tolerance for blackbox exploration.");
     public static Option iterationSamplesOption =  new Option(null, "iterSamples", true, "Number of sample paths to be generated per episodic run.");
     public static Option updateMethodOption = new Option(null, "updateMethod", true, "Update method to be used (greybox/blackbox)");
+    public static Option transitionProbabilityMethodOption = new Option(null, "transitionProbabilityMethod", true, "Transition probability confidence method to be used (Hoeffding/Martingale)");
     public static Option timeoutOption = new Option(null, "timeout", true, "Time before experiment forcefully terminates");
     public static Option getErrorProbabilityOption = new Option(null, "getErrorProbability", false, "Computes the error probability for blackbox with greybox equations");
     public static Option solveWithQP = new Option(null, "qp", false, "Solve using linear/quadratic programming");
@@ -33,6 +35,7 @@ public class InputOptions {
         return new Options()
                 .addOption(modelOption)
                 .addOption(constantsOption)
+                .addOption(numberOfTransitions)
                 .addOption(precisionOption)
                 .addOption(heuristicOption)
                 .addOption(revisitThresholdOption)
@@ -43,6 +46,7 @@ public class InputOptions {
                 .addOption(errorToleranceOption)
                 .addOption(iterationSamplesOption)
                 .addOption(updateMethodOption)
+                .addOption(transitionProbabilityMethodOption)
                 .addOption(timeoutOption)
                 .addOption(getErrorProbabilityOption)
                 .addOption(solveWithQP)

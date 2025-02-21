@@ -5,6 +5,7 @@ import de.tum.in.naturals.set.NatBitSets;
 import de.tum.in.pet.implementation.reachability.BlackUnboundedReachValues;
 import de.tum.in.pet.sampler.UnboundedValues;
 import de.tum.in.pet.util.ErrorProbabilityCalculator;
+import de.tum.in.pet.util.InPlaceBettingMartingale;
 import de.tum.in.pet.values.Bounds;
 import de.tum.in.probmodels.explorer.BlackExplorer;
 import de.tum.in.probmodels.explorer.Explorer;
@@ -47,15 +48,19 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
   private final SimulateMec simulateMec;
   private final int maxSuccessorsInModel;
   private final DeltaTCalculationMethod deltaTCalculationMethod;
+  private final TransitionProbabilityMethod transitionProbabilityMethod;
 
   protected static final double initialNSamples = 1e4;
   protected static final double multiplicativeFactor = 5;
 
+  protected HashMap<Integer, HashMap<Integer, HashMap<Integer, Pair<InPlaceBettingMartingale, Pair<Double, Double>>>>> in_place_martingale = new HashMap<>();
+
   public BlackOnDemandValueIterator(Explorer<S, M> explorer, UnboundedValues values, RewardGenerator<S> rewardGenerator,
                                     int revisitThreshold, double rMax, double pMin, double errorTolerance,
-                                    Double2LongFunction nSampleFunction, double precision, long timeout,
+                                    Double2LongFunction nSampleFunction, double precision, long numberOfTransitions, long timeout,
                                     boolean getErrorProbability, SimulateMec simulateMec,
-                                    DeltaTCalculationMethod deltaTCalculationMethod, int maxSuccessorsInModel) {
+                                    DeltaTCalculationMethod deltaTCalculationMethod, int maxSuccessorsInModel,
+                                    TransitionProbabilityMethod transitionProbabilityMethod) {
     super(explorer, values, rewardGenerator, revisitThreshold, rMax, precision, timeout);
     this.pMin = pMin;
     this.errorTolerance = errorTolerance;
@@ -64,6 +69,52 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
     this.simulateMec = simulateMec;
     this.deltaTCalculationMethod = deltaTCalculationMethod;
     this.maxSuccessorsInModel = maxSuccessorsInModel;
+    this.transitionProbabilityMethod = transitionProbabilityMethod;
+    if (transitionProbabilityMethod == TransitionProbabilityMethod.Martingale) {
+      this.transDelta = errorTolerance / numberOfTransitions;
+    }
+
+    BlackUnboundedReachValues blackValues = (BlackUnboundedReachValues) this.values;
+    BlackExplorer<S, M> explorer_ = (BlackExplorer<S, M>) explorer();
+
+    // Updates the confidenceWidthFunction according to the latest counts and transDelta value. The confidenceWidthFunction
+    // returns the confidenceWidth for a state x and an action with index y. if y is greater than the number of choices
+    // the explorer holds, it must be the stay action. We set confidence width of stay action equal to zero as we
+    // know the probabilities of the action are accurate as they have been calculated and not learned.
+    Int2ObjectFunction<Int2DoubleFunction> confidenceWidthFunction;
+    if (transitionProbabilityMethod == TransitionProbabilityMethod.Hoeffding) {
+      confidenceWidthFunction = state -> (action -> action < explorer.getChoices(state).size()
+              ? Math.sqrt(-Math.log(transDelta) / (2 * explorer_.getActionCounts(state, action)))
+              : 0);
+    } else {
+      confidenceWidthFunction = state -> (action -> {
+        if (action >= explorer.getChoices(state).size()) {
+          return 0d;
+        }
+        HashMap<Integer, HashMap<Integer, Pair<InPlaceBettingMartingale, Pair<Double, Double>>>> actionMartingale = in_place_martingale.get(state);
+        if (actionMartingale == null) { return 1d; }
+
+        HashMap<Integer, Pair<InPlaceBettingMartingale, Pair<Double, Double>>> nextStateMartingale = actionMartingale.get(action);
+        if (nextStateMartingale == null) { return 1d; }
+
+        double max = Double.NEGATIVE_INFINITY;
+        for (var pair: nextStateMartingale.entrySet()) {
+          InPlaceBettingMartingale martingale = pair.getValue().first;
+          de.tum.in.pet.util.Pair<Double, Double> valuePair = martingale.confidence_width(100, pair.getValue().second.first, pair.getValue().second.second, true, 0.5, 0.5);
+          double value = valuePair.second - valuePair.first;
+          if (max < value) {
+            max = value;
+          }
+          pair.getValue().second.first = valuePair.first;
+          pair.getValue().second.second = valuePair.second;
+        }
+        return max;
+      });
+    }
+
+    // Updates the confidence width function in UnboundedReachValues.
+    blackValues.setConfidenceWidthFunction(confidenceWidthFunction);
+    initSinkStates();
   }
 
   @Override
@@ -71,10 +122,30 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
     return values.bounds(state);
   }
 
+  public void updateMartingaleTransitions(int currentState, int actionIndex, int nextState) {
+    // TODO: `action` is `nextActionIndex` from the caller side, therefore we can
+    //       optimise `martingaleTransitions` as (int -> array -> array) instead of (int -> int -> int -> array)
+    in_place_martingale.putIfAbsent(currentState, new HashMap<>());
+    HashMap<Integer, HashMap<Integer, Pair<InPlaceBettingMartingale, Pair<Double, Double>>>> actionMartingales = in_place_martingale.get(currentState);
+
+    actionMartingales.putIfAbsent(actionIndex, new HashMap<>());
+    HashMap<Integer, Pair<InPlaceBettingMartingale, Pair<Double, Double>>> nextStateMartingale = actionMartingales.get(actionIndex);
+
+    // Get all possible nextStates
+    explorer.getActions(currentState).get(actionIndex).distribution().forEach((s, d) -> {
+      nextStateMartingale.putIfAbsent(s, new Pair<>(new InPlaceBettingMartingale(0.05, 0.5, 0.25, 1, 1), new Pair<>(0.0, 1.0)));
+
+      InPlaceBettingMartingale martingale = nextStateMartingale.get(s).first;
+      if (s == nextState) {
+        martingale.AddObservation(1);
+      } else {
+        martingale.AddObservation(0);
+      }
+    });
+  }
+
   @Override
   protected boolean sample(int initialState, int run) throws PrismException {
-
-    BlackUnboundedReachValues values = (BlackUnboundedReachValues) this.values;
 
     BlackExplorer<S, M> explorer = (BlackExplorer<S, M>) explorer();
 
@@ -86,18 +157,6 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
 
     double k = Math.pow(2, run);
     long nIterations = nSampleFunction.apply(k);
-    double errorTolerance = this.errorTolerance;
-
-    // Updates the confidenceWidthFunction according to the latest counts and transDelta value. The confidenceWidthFunction
-    // returns the confidenceWidth for a state x and an action with index y. if y is greater than the number of choices
-    // the explorer holds, it must be the stay action. We set confidence width of stay action equal to zero as we
-    // know the probabilities of the action are accurate as they have been calculated and not learned.
-    Int2ObjectFunction<Int2DoubleFunction> confidenceWidthFunction = x -> (y -> y < explorer.getChoices(x).size()
-            ? Math.sqrt(-Math.log(transDelta)/(2*explorer.getActionCounts(x, y)))
-            : 0);
-
-    // Updates the confidence width function in UnboundedReachValues.
-    values.setConfidenceWidthFunction(confidenceWidthFunction);
 
     for (int i = 0; i < nIterations; i++) {
       IntList visitStack = new IntArrayList();
@@ -167,6 +226,11 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
           // If this action has been sampled enough number of times, we know that it can now be considered as a part of an MEC.
           // Hence, we know that there might be new MECs in the model and it could be worthwhile finding them again.
           seenNewTransitionSignificantly |= explorer.updateCounts(currentState, nextActionIndex, nextState);
+
+          // update distribution to compute martingale
+          if (transitionProbabilityMethod == TransitionProbabilityMethod.Martingale) {
+            updateMartingaleTransitions(currentState, nextActionIndex, nextState);
+          }
         }
         totalTransitionsSimulated++;
 
@@ -180,13 +244,9 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
 
     handleComponents();
 
-    values.resetBounds();
-    initSinkStates();
-
-    confidenceWidthFunction = x -> (y -> y < explorer.getChoices(x).size()
-            ? Math.sqrt(-Math.log(transDelta)/(2*explorer.getActionCounts(x, y)))
-            : 0);
-    values.setConfidenceWidthFunction(confidenceWidthFunction);
+    if (transitionProbabilityMethod == TransitionProbabilityMethod.Hoeffding) {
+      values.resetBounds();
+    }
 
     // the update function is ran until there has been some progress, i.e., the upper bounds of some state have been changed.
     // if there has been change, this change needs to be propagated through the rest of the states.
@@ -203,7 +263,6 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
   }
 
   private void computeDeltaT(BlackExplorer<S, M> explorer, double errorTolerance, int run) {
-    double series = 0;
     switch (deltaTCalculationMethod) {
       case P_MIN:
         transDelta = errorTolerance *pMin/ explorer.getNumExploredActions();
@@ -213,7 +272,7 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
         transDelta = errorTolerance / (explorer.getNumExploredActions() * maxSuccessorsInModel);
         break;
     }
-    series += (6 / Math.pow(Math.PI, 2)) * (1 / Math.pow(run, 2));
+    double series = (6 / Math.pow(Math.PI, 2)) * (1 / Math.pow(run, 2));
     transDelta = transDelta * series;
     explorer.updateCountParams(transDelta, pMin);
   }
@@ -338,7 +397,7 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
 
     RestrictedMecBoundedValueIterator<S> valueIterator = new RestrictedMecBoundedValueIterator<>(mec, targetPrecision/2,
             rewardGenerator, stateIndexMap, rMax, timeout);
-    valueIterator.setConfidenceWidthFunction(x -> (y -> Math.sqrt(-Math.log(transDelta)/(2*explorer.getActionCounts(x, y)))));
+
     valueIterator.setDistributionFunction(x -> y -> this.explorer.model().getChoice(x, y));
     valueIterator.setLabelFunction(x -> y -> this.explorer.model().getActions(x).get(y).label());
 
