@@ -132,7 +132,7 @@ public class OnDemandValueIterator<S, M extends Model> implements Iterator<S, M>
     // isSolved() defined in UnboundedReachValues
     while(!(values.isSolved(representative)|| isTimeout())) {  // The values between upper and lower bounds for the initial states should,be less than epsilon
 //      logger.log(Level.INFO, "Run "+run);
-      logger.log(Level.INFO, values.bounds(representative).toString());
+      logger.log(Level.INFO, "run " + run + ": " + values.bounds(representative).toString());
       if (sample(representative, run)) {
         // initialState may be part of an MEC and the MEC may be collapsed, and we may have a representative that is different
         // from initialState
