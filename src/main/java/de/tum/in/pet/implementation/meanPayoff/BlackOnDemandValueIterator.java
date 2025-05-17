@@ -163,6 +163,8 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
           // If this action has been sampled enough number of times, we know that it can now be considered as a part of an MEC.
           // Hence, we know that there might be new MECs in the model and it could be worthwhile finding them again.
           seenNewTransitionSignificantly |= explorer.updateCounts(currentState, nextActionIndex, nextState);
+
+          totalTransitionsSimulated++;
         }
 
         // This is true when the currentState doesn't have any choices from it, i.e. it is a sink state.
