@@ -166,6 +166,7 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
 
           totalTransitionsSimulated++;
         }
+        totalTransitionsSimulated++;
 
         // This is true when the currentState doesn't have any choices from it, i.e. it is a sink state.
         if (nextState == -1) {
