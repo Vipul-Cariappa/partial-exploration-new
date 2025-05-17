@@ -203,16 +203,10 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
 
   }
 
+  private int n = 1;
   private void computeDeltaT(BlackExplorer<S, M> explorer, double errorTolerance) {
-    switch (deltaTCalculationMethod) {
-      case P_MIN:
-        transDelta = errorTolerance *pMin/ explorer.getNumExploredActions();
-        break;
-
-      case MAX_SUCCESSORS:
-        transDelta = errorTolerance / (explorer.getNumExploredActions() * maxSuccessorsInModel);
-        break;
-    }
+    transDelta = (6 / Math.pow(Math.PI, 2)) * (1 / Math.pow(n, 1));
+    n++;
 
     explorer.updateCountParams(transDelta, pMin);
   }
