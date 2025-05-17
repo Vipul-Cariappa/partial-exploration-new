@@ -222,6 +222,7 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
           // update distribution to compute martingale
           updateMartingaleTransitions(currentState, nextActionIndex, nextState);
         }
+        totalTransitionsSimulated++;
 
         // This is true when the currentState doesn't have any choices from it, i.e. it is a sink state.
         if (nextState == -1) {
