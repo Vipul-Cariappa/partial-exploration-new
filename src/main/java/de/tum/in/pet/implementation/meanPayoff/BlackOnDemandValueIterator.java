@@ -4,10 +4,8 @@ import de.tum.in.naturals.set.NatBitSet;
 import de.tum.in.naturals.set.NatBitSets;
 import de.tum.in.pet.implementation.reachability.BlackUnboundedReachValues;
 import de.tum.in.pet.sampler.UnboundedValues;
-import de.tum.in.pet.util.BettingMartingale;
 import de.tum.in.pet.util.ErrorProbabilityCalculator;
 import de.tum.in.pet.util.InPlaceBettingMartingale;
-import de.tum.in.pet.util.VectorDouble;
 import de.tum.in.pet.values.Bounds;
 import de.tum.in.probmodels.explorer.BlackExplorer;
 import de.tum.in.probmodels.explorer.Explorer;
@@ -87,20 +85,16 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
       if (action >= explorer.getChoices(state).size()) {
         return 0d;
       }
-      HashMap<Integer, HashMap<Integer, Pair<ArrayList<Integer>, Pair<Double, Double>>>> actionHash = martingaleTransitions.get(state);
       HashMap<Integer, HashMap<Integer, Pair<InPlaceBettingMartingale, Pair<Double, Double>>>> actionMartingale = in_place_martingale.get(state);
-      if (actionHash == null) { return 1d; }
+      if (actionMartingale == null) { return 1d; }
 
-      HashMap<Integer, Pair<ArrayList<Integer>, Pair<Double, Double>>> nextStateHash = actionHash.get(action);
       HashMap<Integer, Pair<InPlaceBettingMartingale, Pair<Double, Double>>> nextStateMartingale = actionMartingale.get(action);
-      if (nextStateHash == null) { return 1d; }
+      if (nextStateMartingale == null) { return 1d; }
 
       double max = Double.NEGATIVE_INFINITY;
-      for (var pair: nextStateHash.entrySet()) {
-        double[] sample = pair.getValue().first.stream().mapToDouble(i -> (double) i).toArray();
-        de.tum.in.pet.util.Pair<Double, Double> valuePair = BettingMartingale.confidence_width(
-                new VectorDouble(sample),
-                100, pair.getValue().second.first, pair.getValue().second.second, 0.05, true, 0.5, 0.5);
+      for (var pair: nextStateMartingale.entrySet()) {
+        InPlaceBettingMartingale martingale = pair.getValue().first;
+        de.tum.in.pet.util.Pair<Double, Double> valuePair = martingale.confidence_width(100, pair.getValue().second.first, pair.getValue().second.second, true, 0.5, 0.5);
         double value = valuePair.second - valuePair.first;
         if (max < value) {
           max = value;
@@ -108,18 +102,6 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
         pair.getValue().second.first = valuePair.first;
         pair.getValue().second.second = valuePair.second;
       }
-      double max_in_place_martingale = Double.NEGATIVE_INFINITY;
-      for (var pair: nextStateMartingale.entrySet()) {
-        InPlaceBettingMartingale martingale = pair.getValue().first;
-        de.tum.in.pet.util.Pair<Double, Double> valuePair = martingale.confidence_width(100, pair.getValue().second.first, pair.getValue().second.second, true, 0.5, 0.5);
-        double value = valuePair.second - valuePair.first;
-        if (max_in_place_martingale < value) {
-          max_in_place_martingale = value;
-        }
-        pair.getValue().second.first = valuePair.first;
-        pair.getValue().second.second = valuePair.second;
-      }
-      assert max_in_place_martingale == max;
       return max;
     });
 
@@ -132,32 +114,23 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
     return values.bounds(state);
   }
 
-  public HashMap<Integer, HashMap<Integer, HashMap<Integer, Pair<ArrayList<Integer>, Pair<Double, Double>>>>> martingaleTransitions = new HashMap<>();
   public void updateMartingaleTransitions(int currentState, int actionIndex, int nextState) {
     // TODO: `action` is `nextActionIndex` from the caller side, therefore we can
     //       optimise `martingaleTransitions` as (int -> array -> array) instead of (int -> int -> int -> array)
-    martingaleTransitions.putIfAbsent(currentState, new HashMap<>());
     in_place_martingale.putIfAbsent(currentState, new HashMap<>());
-    HashMap<Integer, HashMap<Integer, Pair<ArrayList<Integer>, Pair<Double, Double>>>> actionHash = martingaleTransitions.get(currentState);
     HashMap<Integer, HashMap<Integer, Pair<InPlaceBettingMartingale, Pair<Double, Double>>>> actionMartingales = in_place_martingale.get(currentState);
 
-    actionHash.putIfAbsent(actionIndex, new HashMap<>());
     actionMartingales.putIfAbsent(actionIndex, new HashMap<>());
-    HashMap<Integer, Pair<ArrayList<Integer>, Pair<Double, Double>>> nextStateHash = actionHash.get(actionIndex);
     HashMap<Integer, Pair<InPlaceBettingMartingale, Pair<Double, Double>>> nextStateMartingale = actionMartingales.get(actionIndex);
 
     // Get all possible nextStates
     explorer.getActions(currentState).get(actionIndex).distribution().forEach((s, d) -> {
-      nextStateHash.putIfAbsent(s, new Pair<>(new ArrayList<>(), new Pair<>(0.0, 1.0)));
       nextStateMartingale.putIfAbsent(s, new Pair<>(new InPlaceBettingMartingale(0.05, 0.5, 0.25, 1, 1), new Pair<>(0.0, 1.0)));
 
-      ArrayList<Integer> distribution = nextStateHash.get(s).first;
       InPlaceBettingMartingale martingale = nextStateMartingale.get(s).first;
       if (s == nextState) {
-        distribution.add(1);
         martingale.AddObservation(1);
       } else {
-        distribution.add(0);
         martingale.AddObservation(0);
       }
     });
