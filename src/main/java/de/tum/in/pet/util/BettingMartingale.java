@@ -1,13 +1,12 @@
 package de.tum.in.pet.util;
 
 public class BettingMartingale {
-    static VectorDouble betting_mart(VectorDouble x, double m, double alpha, double theta, double trunc_scale) {
+    static VectorDouble betting_mart(VectorDouble x, VectorDouble lambda_positive, double m, double alpha, double theta, double trunc_scale) {
         // alpha = 0.05;
         // theta = 0.5;
         // trunc_scale = 0.5;
 
         VectorDouble mu_t = VectorDouble.filled(x.size(), m);
-        VectorDouble lambda_positive = lambda_predmix_eb(x, alpha, 0.5, 0.25, 1, 1);
         VectorDouble lambda_negative = VectorDouble.copy(lambda_positive);
 
         assert (0 < trunc_scale) && (trunc_scale <= 1);
@@ -68,9 +67,9 @@ public class BettingMartingale {
         return capital_process;
     }
 
-    static VectorDouble diversified_betting_mart(VectorDouble x, double m, double alpha, double theta, double trunc_scale) {
-        VectorDouble mart_positive = betting_mart(x, m, alpha, 1, trunc_scale);
-        VectorDouble mart_negative = betting_mart(x, m, alpha, 0, trunc_scale);
+    static VectorDouble diversified_betting_mart(VectorDouble x, VectorDouble lambda, double m, double alpha, double theta, double trunc_scale) {
+        VectorDouble mart_positive = betting_mart(x, lambda, m, alpha, 1, trunc_scale);
+        VectorDouble mart_negative = betting_mart(x, lambda, m, alpha, 0, trunc_scale);
 
         VectorDouble mart;
         if (theta == 1) {
@@ -88,14 +87,14 @@ public class BettingMartingale {
         return mart;
     }
 
-    static Pair<VectorDouble, VectorDouble> confidence_sequence_from_martingale(VectorDouble x, int breaks, double break_start, double break_stop, double alpha, boolean running_intersection, double theta, double trunc_scale) {
+    static Pair<VectorDouble, VectorDouble> confidence_sequence_from_martingale(VectorDouble x, VectorDouble lambda, int breaks, double break_start, double break_stop, double alpha, boolean running_intersection, double theta, double trunc_scale) {
 //        VectorDouble possible_m = VectorDouble.arange(0, 1 + (double) 1 / breaks, (double) 1 / breaks);
         VectorDouble possible_m = VectorDouble.linspace(break_start, break_stop, breaks);
         MatrixDouble confseq_mtx = MatrixDouble.zeros(possible_m.size(), x.size());
 
         for (int i = 0; i < possible_m.size(); i++) {
             double m = VectorDouble.index(possible_m, i);
-            confseq_mtx.setRow(i, VectorDouble.lessThanOrEqual(diversified_betting_mart(x, m, alpha, theta, trunc_scale), 1 / alpha));
+            confseq_mtx.setRow(i, VectorDouble.lessThanOrEqual(diversified_betting_mart(x, lambda, m, alpha, theta, trunc_scale), 1 / alpha));
         }
 
         VectorDouble l = VectorDouble.zeros(x.size());
@@ -134,7 +133,8 @@ public class BettingMartingale {
     }
 
     public static Pair<Double, Double> confidence_width(VectorDouble x, int breaks, double break_start, double break_stop, double alpha, boolean running_intersection, double theta, double trunc_scale) {
-        Pair<VectorDouble, VectorDouble> r = confidence_sequence_from_martingale(x, breaks, break_start, break_stop, alpha, running_intersection, theta, trunc_scale);
+        VectorDouble lambda = lambda_predmix_eb(x, alpha, 0.5, 0.25, 1, 1);
+        Pair<VectorDouble, VectorDouble> r = confidence_sequence_from_martingale(x, lambda, breaks, break_start, break_stop, alpha, running_intersection, theta, trunc_scale);
         VectorDouble l = r.first;
         VectorDouble u = r.second;
         // return VectorDouble.index(u, u.size() - 1) - VectorDouble.index(l, l.size() - 1);

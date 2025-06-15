@@ -10,6 +10,8 @@ public class VectorDouble {
         this.elements = elements;
     }
 
+    public double at(int x) { return elements[x]; }
+
     // Static initializers
     public static VectorDouble arange(double start, double stop, double step) {
         int size = (int) Math.ceil((stop - start) / step);
