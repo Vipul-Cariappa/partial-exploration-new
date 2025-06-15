@@ -163,9 +163,8 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
           // If this action has been sampled enough number of times, we know that it can now be considered as a part of an MEC.
           // Hence, we know that there might be new MECs in the model and it could be worthwhile finding them again.
           seenNewTransitionSignificantly |= explorer.updateCounts(currentState, nextActionIndex, nextState);
-
-          totalTransitionsSimulated++;
         }
+        totalTransitionsSimulated++;
 
         // This is true when the currentState doesn't have any choices from it, i.e. it is a sink state.
         if (nextState == -1) {
@@ -205,9 +204,21 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
 
   }
 
-  private int n = 1;
+  private long n = 1;
+  // private double series = 0;
   private void computeDeltaT(BlackExplorer<S, M> explorer, double errorTolerance) {
-    transDelta = (6 / Math.pow(Math.PI, 2)) * (1 / Math.pow(n, 1));
+    double series = 0;
+    switch (deltaTCalculationMethod) {
+      case P_MIN:
+        transDelta = errorTolerance *pMin/ explorer.getNumExploredActions();
+        break;
+
+      case MAX_SUCCESSORS:
+        transDelta = errorTolerance / (explorer.getNumExploredActions() * maxSuccessorsInModel);
+        break;
+    }
+    series += (6 / Math.pow(Math.PI, 2)) * (1 / Math.pow(n, 2));
+    transDelta = transDelta * series;
     n++;
 
     explorer.updateCountParams(transDelta, pMin);
