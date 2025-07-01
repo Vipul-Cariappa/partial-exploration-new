@@ -164,6 +164,8 @@ public class OnDemandValueIterator<S, M extends Model> implements Iterator<S, M>
   protected void onSamplingFinished(int initialState) {
     additionalWriteInfo.add(String.valueOf(explorer.exploredStateCount()));
     additionalWriteInfo.add("Total Transitions Simulated: " + totalTransitionsSimulated);
+    if (timeout < timeVBound.get(timeVBound.size() - 1).first)
+      additionalWriteInfo.add("TimeOut");
   }
 
   /**
