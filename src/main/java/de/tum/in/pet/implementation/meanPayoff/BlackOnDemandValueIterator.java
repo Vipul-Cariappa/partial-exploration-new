@@ -75,11 +75,10 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
     // returns the confidenceWidth for a state x and an action with index y. if y is greater than the number of choices
     // the explorer holds, it must be the stay action. We set confidence width of stay action equal to zero as we
     // know the probabilities of the action are accurate as they have been calculated and not learned.
-    
-    // BlackExplorer<S, M> explorer_ = (BlackExplorer<S, M>) explorer();
-    // Int2ObjectFunction<Int2DoubleFunction> confidenceWidthFunction = state -> (action -> action < explorer.getChoices(state).size()
-    //         ? Math.sqrt(-Math.log(transDelta)/(2*explorer_.getActionCounts(state, action)))
-    //         : 0);
+
+//     Int2ObjectFunction<Int2DoubleFunction> oldConfidenceWidthFunction = state -> (action -> action < explorer.getChoices(state).size()
+//             ? Math.sqrt(-Math.log(transDelta)/(2*explorer_.getActionCounts(state, action)))
+//             : 0);
 
     Int2ObjectFunction<Int2DoubleFunction> confidenceWidthFunction = state -> (action -> {
       if (action >= explorer.getChoices(state).size()) {
@@ -102,6 +101,7 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
         pair.getValue().second.first = valuePair.first;
         pair.getValue().second.second = valuePair.second;
       }
+//      logger.log(Level.INFO, max + " - " + oldConfidenceWidthFunction.get(state).get(action));
       return max;
     });
 
@@ -113,6 +113,23 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
   public Bounds bounds(int state) {
     return values.bounds(state);
   }
+
+  // Log of samples
+//  protected List<Integer> samplesMin = new ArrayList<>();
+//  protected List<Integer> samplesMax = new ArrayList<>();
+//  protected List<Integer> samplesAvg = new ArrayList<>();
+//  protected HashMap<Integer, HashMap<Integer, HashMap<Integer, Integer>>> samples = new HashMap<>();
+//  protected void updateTransitions(int currentState, int actionIndex, int nextState) {
+//    samples.putIfAbsent(currentState, new HashMap<>());
+//    HashMap<Integer, HashMap<Integer, Integer>> actions = samples.get(currentState);
+//    actions.putIfAbsent(actionIndex, new HashMap<>());
+//    HashMap<Integer, Integer> state = actions.get(actionIndex);
+//    if (state.containsKey(nextState)) {
+//      state.put(nextState, state.get(nextState) + 1);
+//    } else {
+//      state.put(nextState, 1);
+//    }
+//  }
 
   public void updateMartingaleTransitions(int currentState, int actionIndex, int nextState) {
     // TODO: `action` is `nextActionIndex` from the caller side, therefore we can
