@@ -6,6 +6,8 @@ import org.apache.commons.cli.Options;
 
 // On adding new option, make sure to add them to getAllInputOptions method
 public class InputOptions {
+    public static Option aggregationCount = new Option(null, "aggregationCount", true, "Count of samples to aggregate while computing martingales. " +
+                                                                                       "Pass value less then 1 to decide dynamically at runtime. (Default: 1)");
     public static Option numberOfTransitions = new Option(null, "numberOfTransitions", true, "Upper bound on total transitions in the model. (Default: 10^7)");
     public static Option precisionOption = new Option(null, "precision", true, "Required precision of the returned value. (Default: 10^{-6})");
     public static Option heuristicOption = CliHelper.getDefaultHeuristicOption();
@@ -36,6 +38,7 @@ public class InputOptions {
                 .addOption(modelOption)
                 .addOption(constantsOption)
                 .addOption(numberOfTransitions)
+                .addOption(aggregationCount)
                 .addOption(precisionOption)
                 .addOption(heuristicOption)
                 .addOption(revisitThresholdOption)

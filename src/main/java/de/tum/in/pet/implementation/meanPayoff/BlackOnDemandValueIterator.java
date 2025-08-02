@@ -31,6 +31,7 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
 
   protected final double pMin; // as mentioned in CAV'19. It should be set to the lowest transition probability of the input model.
   protected final double errorTolerance; // as mentioned in CAV'19. Error tolerance for the learned distributions of the learned model.
+  protected final int aggregationCount;
   protected final Double2LongFunction nSampleFunction; // returns N_k for each k as in CAV'19. Returns the number of times paths should be sampled for each value of k.
 
   protected List<NatBitSet> mecs = new ArrayList<>(); // Holds a list of mecs in the model.
@@ -57,8 +58,8 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
 
   public BlackOnDemandValueIterator(Explorer<S, M> explorer, UnboundedValues values, RewardGenerator<S> rewardGenerator,
                                     int revisitThreshold, double rMax, double pMin, double errorTolerance,
-                                    Double2LongFunction nSampleFunction, double precision, long numberOfTransitions, long timeout,
-                                    boolean getErrorProbability, SimulateMec simulateMec,
+                                    Double2LongFunction nSampleFunction, double precision, long numberOfTransitions,
+                                    int aggregationCount, long timeout, boolean getErrorProbability, SimulateMec simulateMec,
                                     DeltaTCalculationMethod deltaTCalculationMethod, int maxSuccessorsInModel,
                                     TransitionProbabilityMethod transitionProbabilityMethod) {
     super(explorer, values, rewardGenerator, revisitThreshold, rMax, precision, timeout);
@@ -73,6 +74,7 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
     if (transitionProbabilityMethod == TransitionProbabilityMethod.Martingale) {
       this.transDelta = errorTolerance / numberOfTransitions;
     }
+    this.aggregationCount = aggregationCount;
 
     BlackUnboundedReachValues blackValues = (BlackUnboundedReachValues) this.values;
     BlackExplorer<S, M> explorer_ = (BlackExplorer<S, M>) explorer();
@@ -100,7 +102,7 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
         double max = Double.NEGATIVE_INFINITY;
         for (var pair: nextStateMartingale.entrySet()) {
           InPlaceBettingMartingale martingale = pair.getValue().first;
-          de.tum.in.pet.util.Pair<Double, Double> valuePair = martingale.confidence_width(pair.getValue().second.first, pair.getValue().second.second);
+          Pair<Double, Double> valuePair = martingale.getConfidenceWidth();
           double value = valuePair.second - valuePair.first;
           if (max < value) {
             max = value;
@@ -123,8 +125,6 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
   }
 
   public void updateMartingaleTransitions(int currentState, int actionIndex, int nextState) {
-    // TODO: `action` is `nextActionIndex` from the caller side, therefore we can
-    //       optimise `martingaleTransitions` as (int -> array -> array) instead of (int -> int -> int -> array)
     in_place_martingale.putIfAbsent(currentState, new HashMap<>());
     HashMap<Integer, HashMap<Integer, Pair<InPlaceBettingMartingale, Pair<Double, Double>>>> actionMartingales = in_place_martingale.get(currentState);
 
@@ -133,13 +133,13 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
 
     // Get all possible nextStates
     explorer.getActions(currentState).get(actionIndex).distribution().forEach((s, d) -> {
-      nextStateMartingale.putIfAbsent(s, new Pair<>(new InPlaceBettingMartingale(0.05, 0.5, 0.25, 1, 1), new Pair<>(0.0, 1.0)));
+      nextStateMartingale.putIfAbsent(s, new Pair<>(new InPlaceBettingMartingale(errorTolerance, aggregationCount), new Pair<>(0.0, 1.0)));
 
       InPlaceBettingMartingale martingale = nextStateMartingale.get(s).first;
       if (s == nextState) {
-        martingale.AddObservation(1);
+        martingale.observe(1);
       } else {
-        martingale.AddObservation(0);
+        martingale.observe(0);
       }
     });
   }

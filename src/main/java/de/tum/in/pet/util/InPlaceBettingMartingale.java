@@ -19,21 +19,25 @@ public class InPlaceBettingMartingale {
     double samples_cumulative_sum;
     double samples_mean_diff_sq;
     VectorDouble lambda = new VectorDouble();
-    double base_aggregation_count = 5;
 
     private int decide_aggregation_count() {
-        double current_mean = (confidence.second + confidence.first) / 2.0;
-        double mean = (current_mean <= 0.5) ? current_mean : (1 - current_mean);
-        double aggregation_count = mean * 198 + 1; // using range [1, 100]
-        double adjusted_confidence_width = Math.pow(confidence.second - confidence.first, 8.0);
-        double aggregate_count_adjusted_to_confidence = (1 - adjusted_confidence_width) * aggregation_count + adjusted_confidence_width * base_aggregation_count;
-        return (int)Math.round(aggregate_count_adjusted_to_confidence);
-    }
-
-    private int decide_aggregation_count2() {
         double confidence_width = confidence.second - confidence.first;
         double aggregate_count = (1 - confidence_width) * 99 + 1;
         return (int)Math.round(aggregate_count);
+    }
+
+    public InPlaceBettingMartingale(double alpha, int aggregate) {
+        this.alpha = alpha;
+        this.aggregate = aggregate;
+        this.prior_mean = 0.5;
+        this.prior_variance = 0.25;
+        this.fake_obs = 1;
+        this.scale = 1;
+        this.samples_count = 0;
+        this.samples_cumulative_sum = 0;
+        this.samples_mean_diff_sq = 0;
+        this.confidence = new Pair<>(0.0, 1.0);
+        this.aggregate_cache = new ArrayList<>();
     }
 
     public InPlaceBettingMartingale(double alpha, double prior_mean, double prior_variance, double fake_obs, double scale, int aggregate) {
@@ -66,15 +70,13 @@ public class InPlaceBettingMartingale {
 
     public int size() { return samples_count; }
 
-    public void AddObservation(double sample) {
+    public void observe(double sample) {
         double mean = sample;
         if (aggregate != 1) {
             aggregate_cache.add(sample);
             double aggregate = this.aggregate;
-            if (aggregate == -1)
+            if (aggregate < 1)
                 aggregate = decide_aggregation_count();
-            else if (aggregate == -2)
-                aggregate = decide_aggregation_count2();
             if (aggregate_cache.size() < aggregate)
                 return;
 
@@ -94,15 +96,36 @@ public class InPlaceBettingMartingale {
         samples_cumulative_sum += sample;
 
         // lazy compute mut_hat_t
-        double mu_hat_t = (samples_cumulative_sum + fake_obs * prior_mean) / (samples_count + fake_obs);
+        double mu_hat_t = Math.min((samples_cumulative_sum + fake_obs + prior_mean) / (samples_count + fake_obs), 1);
 
         // lazy compute sigma2_t
-        double sigma2_t = (samples_mean_diff_sq + (fake_obs * prior_variance)) / samples_count;
         samples_mean_diff_sq += Math.pow(sample - mu_hat_t, 2.0);
+        double sigma2_t = (samples_mean_diff_sq + (fake_obs * prior_variance)) / (samples_count + fake_obs);
 
         // lazy compute lambda
-        double lambda_i = Math.sqrt((2.0 * Math.log(2.0 / alpha)) / (samples_count * Math.log(samples_count + fake_obs) * (sigma2_t)));
+        double lambda_i = Math.sqrt((2.0 * Math.log(2.0 / alpha)) / ((samples.size() * Math.log(samples.size() + 1.0)) * (sigma2_t)));
         lambda.append(lambda_i);
+    }
+
+    public void recompute(double alpha) {
+        this.alpha = alpha;
+        VectorDouble samples = this.samples;
+
+        // clear existing data
+        samples_count = 0;
+        samples_cumulative_sum = 0;
+        samples_mean_diff_sq = 0;
+        last_computed_at = 0;
+        confidence = new Pair<>(0.0, 1.0);
+        aggregate_cache = new ArrayList<>();
+        lambda = new VectorDouble(samples.size());
+        this.samples = new VectorDouble(samples.size());
+
+        // add observation and compute confidence_with at the same time
+        for (int i = 0; i < samples.size(); i++) {
+            observe(samples.at(i));
+            getConfidenceWidth();
+        }
     }
 
     private Pair<Double, Double> confidence_width(int breaks, double break_start, double break_stop, boolean running_intersection, double theta, double trunc_scale) {
@@ -156,7 +179,7 @@ public class InPlaceBettingMartingale {
         return new Pair<>(heuristic_search(low, high, iter_count, true, precision, delta), heuristic_search(low, high, iter_count, false, precision, delta));
     }
 
-    public Pair<Double, Double> confidence_width() {
+    public Pair<Double, Double> getConfidenceWidth() {
         if (samples.size() > last_computed_at) {
             last_computed_at = samples.size();
             confidence = confidence_width(confidence.first, confidence.second);
