@@ -56,4 +56,48 @@ public class InPlaceBettingMartingale {
         // return VectorDouble.index(u, u.size() - 1) - VectorDouble.index(l, l.size() - 1);
         return new Pair<>(VectorDouble.index(l, l.size() - 1), VectorDouble.index(u, u.size() - 1));
     }
+
+    private boolean is_in_interval(double x) {
+        VectorDouble mart = BettingMartingale.diversified_betting_mart(samples, lambda, x, alpha, 0.5, 0.5);
+        double value = mart.at(mart.size() - 1);
+        return value < (1 / alpha);
+    }
+
+    private double derivative(double x, double delta) {
+        VectorDouble mart_neg = BettingMartingale.diversified_betting_mart(samples, lambda, x - delta, alpha, 0.5, 0.5);
+        VectorDouble mart_pos = BettingMartingale.diversified_betting_mart(samples, lambda, x + delta, alpha, 0.5, 0.5);
+        double d_neg = mart_neg.at(mart_neg.size() - 1);
+        double d_pos = mart_pos.at(mart_pos.size() - 1);
+        return d_pos - d_neg;
+    }
+
+    public double heuristic_search(double low, double high, int iter_count, boolean find_low, double precision, double delta) {
+        while ((precision <= (high - low)) && (iter_count >= 0)) {
+            iter_count--;
+            double mid = (high + low) / 2;
+            if (is_in_interval(mid)) {
+                if (find_low)
+                    high = mid;
+                else
+                    low = mid;
+            } else {
+                double compute_delta = Math.min(delta, (high - low) / 8);
+                double df = derivative(mid, compute_delta);
+                if (df > 0)
+                    high = mid;
+                else
+                    low = mid;
+            }
+        }
+        if (find_low)
+            return low;
+        return high;
+    }
+
+    public Pair<Double, Double> confidence_width(double low, double high) {
+        int iter_count = 20;
+        double precision = 1e-8;
+        double delta = 1e-6;
+        return new Pair<>(heuristic_search(low, high, iter_count, true, precision, delta), heuristic_search(low, high, iter_count, false, precision, delta));
+    }
 }
