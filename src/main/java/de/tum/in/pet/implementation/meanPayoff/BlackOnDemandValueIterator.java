@@ -93,7 +93,7 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
       double max = Double.NEGATIVE_INFINITY;
       for (var pair: nextStateMartingale.entrySet()) {
         InPlaceBettingMartingale martingale = pair.getValue().first;
-        de.tum.in.pet.util.Pair<Double, Double> valuePair = martingale.confidence_width(pair.getValue().second.first, pair.getValue().second.second);
+        de.tum.in.pet.util.Pair<Double, Double> valuePair = martingale.confidence_width();
         double value = valuePair.second - valuePair.first;
         if (max < value) {
           max = value;
@@ -142,7 +142,7 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
 
     // Get all possible nextStates
     explorer.getActions(currentState).get(actionIndex).distribution().forEach((s, d) -> {
-      nextStateMartingale.putIfAbsent(s, new Pair<>(new InPlaceBettingMartingale(0.05, 0.5, 0.25, 1, 1), new Pair<>(0.0, 1.0)));
+      nextStateMartingale.putIfAbsent(s, new Pair<>(new InPlaceBettingMartingale(0.05, 0.5, 0.25, 1, 1, 15), new Pair<>(0.0, 1.0)));
 
       InPlaceBettingMartingale martingale = nextStateMartingale.get(s).first;
       if (s == nextState) {

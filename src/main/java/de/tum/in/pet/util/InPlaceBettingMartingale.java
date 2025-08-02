@@ -1,5 +1,7 @@
 package de.tum.in.pet.util;
 
+import java.util.ArrayList;
+
 public class InPlaceBettingMartingale {
     VectorDouble samples = new VectorDouble();
     long samples_count;
@@ -8,6 +10,9 @@ public class InPlaceBettingMartingale {
     double prior_variance;
     double fake_obs;
     double scale;
+    int aggregate;
+    ArrayList<Double> aggregate_cache;
+    Pair<Double, Double> confidence;
 
     VectorDouble samples_cumulative_sum;
     VectorDouble samples_mean_diff_sq;
@@ -15,7 +20,7 @@ public class InPlaceBettingMartingale {
     VectorDouble sigma2_t;
     VectorDouble lambda = new VectorDouble();
 
-    public InPlaceBettingMartingale(double alpha, double prior_mean, double prior_variance, double fake_obs, double scale) {
+    public InPlaceBettingMartingale(double alpha, double prior_mean, double prior_variance, double fake_obs, double scale, int aggregate) {
         this.alpha = alpha;
         this.prior_mean = prior_mean;
         this.prior_variance = prior_variance;
@@ -25,9 +30,25 @@ public class InPlaceBettingMartingale {
         this.samples_cumulative_sum = new VectorDouble(0);
         this.samples_mean_diff_sq = new VectorDouble(0);
         this.sigma2_t = new VectorDouble(prior_variance);
+        this.aggregate = aggregate;
+        this.confidence = new Pair<>(0.0, 1.0);
+        this.aggregate_cache = new ArrayList<>();
     }
 
     public void AddObservation(double sample) {
+        aggregate_cache.add(sample);
+        if (aggregate_cache.size() != aggregate)
+            return;
+
+        double mean = 0;
+        for (double i: aggregate_cache) {
+            mean += i;
+        }
+        aggregate_cache.clear();
+        mean = mean / aggregate;
+
+        sample = mean;
+
         samples = VectorDouble.append(samples, sample);
         samples_count += 1;
 
@@ -47,6 +68,8 @@ public class InPlaceBettingMartingale {
         // lazy compute lambda
         double lambda_i = Math.sqrt((2 * Math.log(1 / alpha)) / ((samples.size() * Math.log(samples.size() + 1)) * (sigma2_t_i)));
         lambda = VectorDouble.append(lambda, lambda_i);
+
+        confidence = confidence_width(confidence.first, confidence.second);
     }
 
     public Pair<Double, Double> confidence_width(int breaks, double break_start, double break_stop, boolean running_intersection, double theta, double trunc_scale) {
@@ -100,4 +123,6 @@ public class InPlaceBettingMartingale {
         double delta = 1e-6;
         return new Pair<>(heuristic_search(low, high, iter_count, true, precision, delta), heuristic_search(low, high, iter_count, false, precision, delta));
     }
+
+    public Pair<Double, Double> confidence_width() { return confidence; }
 }
