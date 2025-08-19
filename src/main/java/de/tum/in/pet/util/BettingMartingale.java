@@ -17,8 +17,8 @@ public class BettingMartingale {
         lambda_negative = VectorDouble.min(lambda_negative, VectorDouble.divide(trunc_scale, VectorDouble.subtract(1, mu_t)));
         lambda_negative = VectorDouble.max(lambda_negative, VectorDouble.divide(-trunc_scale, mu_t));
 
-        VectorDouble multiplicand_positive = VectorDouble.add(VectorDouble.multiply(lambda_positive, VectorDouble.subtract(x, mu_t)), 1);
-        VectorDouble multiplicand_negative = VectorDouble.subtract(1, VectorDouble.multiply(lambda_negative, VectorDouble.subtract(x, mu_t)));
+        VectorDouble multiplicand_positive = VectorDouble.multiply(lambda_positive, VectorDouble.subtract(x, mu_t)).add(1);
+        VectorDouble multiplicand_negative = VectorDouble.multiply(lambda_negative, VectorDouble.subtract(x, mu_t)).isubtract(1);
 
         multiplicand_positive = VectorDouble.replace(
                 multiplicand_positive,
@@ -42,13 +42,13 @@ public class BettingMartingale {
 
         VectorDouble capital_process;
         if (theta == 1) {
-            capital_process = VectorDouble.multiply(capital_process_positive, theta);
+            capital_process = capital_process_positive.multiply(theta);
         } else if (theta == 0) {
-            capital_process = VectorDouble.multiply(capital_process_negative, 1 - theta);
+            capital_process = capital_process_negative.multiply(1 - theta);
         } else {
             capital_process = VectorDouble.max(
-                    VectorDouble.multiply(capital_process_positive, theta),
-                    VectorDouble.multiply(capital_process_negative, 1 - theta)
+                    capital_process_positive.multiply(theta),
+                    capital_process_negative.multiply(1 - theta)
             );
         }
 
@@ -78,8 +78,8 @@ public class BettingMartingale {
             mart = mart_negative;
         } else {
             mart = VectorDouble.max(
-                    VectorDouble.multiply(mart_positive, theta),
-                    VectorDouble.multiply(mart_negative, 1 - theta)
+                    mart_positive.multiply(theta),
+                    mart_negative.multiply(1 - theta)
             );
         }
 

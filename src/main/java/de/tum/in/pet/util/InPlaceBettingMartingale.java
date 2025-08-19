@@ -49,27 +49,25 @@ public class InPlaceBettingMartingale {
 
         sample = mean;
 
-        samples = VectorDouble.append(samples, sample);
+        samples.append(sample);
         samples_count += 1;
 
         double sample_cumulative_sum = sample + samples_cumulative_sum.at(samples_cumulative_sum.size() - 1);
-        samples_cumulative_sum = VectorDouble.append(samples_cumulative_sum, sample_cumulative_sum);
+        samples_cumulative_sum.append(sample_cumulative_sum);
 
         // lazy compute mut_hat_t
         double mu_hat_t_i = Math.min((sample_cumulative_sum + fake_obs + prior_mean) / (samples_count + fake_obs), 1);
-        mu_hat_t = VectorDouble.append(mu_hat_t, mu_hat_t_i);
+        mu_hat_t.append(mu_hat_t_i);
         
         // lazy compute sigma2_t
         double sample_mean_diff_sq = Math.pow(sample - mu_hat_t_i, 2) + samples_mean_diff_sq.at(samples_mean_diff_sq.size() - 1);
-        samples_mean_diff_sq = VectorDouble.append(samples_mean_diff_sq, sample_mean_diff_sq);
+        samples_mean_diff_sq.append(sample_mean_diff_sq);
         double sigma2_t_i = ((sample_mean_diff_sq) + (fake_obs * prior_variance)) / (samples_count + fake_obs);
         sigma2_t = VectorDouble.append(sigma2_t, sigma2_t_i);
 
         // lazy compute lambda
         double lambda_i = Math.sqrt((2 * Math.log(1 / alpha)) / ((samples.size() * Math.log(samples.size() + 1)) * (sigma2_t_i)));
-        lambda = VectorDouble.append(lambda, lambda_i);
-
-        confidence = confidence_width(confidence.first, confidence.second);
+        lambda.append(lambda_i);
     }
 
     public Pair<Double, Double> confidence_width(int breaks, double break_start, double break_stop, boolean running_intersection, double theta, double trunc_scale) {
