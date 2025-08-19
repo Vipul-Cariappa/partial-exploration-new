@@ -3,11 +3,15 @@ package de.tum.in.pet.util;
 import java.util.Arrays;
 
 public class VectorDouble {
-    public final double[] elements;
+    public double[] elements;
+    public int size = 0;
+    public int capacity = 0;
 
     // Constructor
     public VectorDouble(double... elements) {
         this.elements = elements;
+        size = this.elements.length;
+        capacity = size;
     }
 
     public double at(int x) { return elements[x]; }
@@ -54,31 +58,40 @@ public class VectorDouble {
         return new VectorDouble(filledArray);
     }
 
+    public void append(double scalar) {
+        if (size >= capacity) {
+            capacity = capacity * 2 + 1;
+            elements = Arrays.copyOf(elements, capacity);
+        }
+        elements[size] = scalar;
+        size++;
+    }
+
     public static VectorDouble append(VectorDouble v, double scalar) {
-        double[] newArray = Arrays.copyOf(v.elements, v.elements.length + 1);
-        newArray[v.elements.length] = scalar;
+        double[] newArray = Arrays.copyOf(v.elements, v.size + 1);
+        newArray[v.size] = scalar;
         return new VectorDouble(newArray);
     }
 
     public static VectorDouble prepend(VectorDouble v, double scalar) {
-        double[] newArray = new double[v.elements.length + 1];
+        double[] newArray = new double[v.size + 1];
         newArray[0] = scalar;
-        System.arraycopy(v.elements, 0, newArray, 1, v.elements.length);
+        System.arraycopy(v.elements, 0, newArray, 1, v.size + 1);
         return new VectorDouble(newArray);
     }
 
     public static VectorDouble copy(VectorDouble v) {
-        return new VectorDouble(Arrays.copyOf(v.elements, v.elements.length));
+        return new VectorDouble(Arrays.copyOf(v.elements, v.size));
     }
 
     // Returns the size of the vector
     public int size() {
-        return elements.length;
+        return size;
     }
 
     // Indexing method
     public static double index(VectorDouble v, int idx) {
-        if (idx < 0 || idx >= v.elements.length) {
+        if (idx < 0 || idx >= v.size) {
             throw new IndexOutOfBoundsException("Index out of bounds");
         }
         return v.elements[idx];
@@ -86,7 +99,7 @@ public class VectorDouble {
 
     // Set value at a specific index
     public static void set(VectorDouble v, int idx, double value) {
-        if (idx < 0 || idx >= v.elements.length) {
+        if (idx < 0 || idx >= v.size) {
             throw new IndexOutOfBoundsException("Index out of bounds");
         }
         v.elements[idx] = value;
@@ -94,7 +107,7 @@ public class VectorDouble {
 
     // Slicing method
     public static VectorDouble slice(VectorDouble v, int start, int end) {
-        if (start < 0 || end > v.elements.length || start > end) {
+        if (start < 0 || end > v.size || start > end) {
             throw new IllegalArgumentException("Invalid slice range");
         }
         return new VectorDouble(Arrays.copyOfRange(v.elements, start, end));
@@ -102,7 +115,7 @@ public class VectorDouble {
 
     // Replace occurrences of a value
     public static VectorDouble replace(VectorDouble v, double from, double to) {
-        double[] result = Arrays.copyOf(v.elements, v.elements.length);
+        double[] result = Arrays.copyOf(v.elements, v.size);
         for (int i = 0; i < result.length; i++) {
             if (result[i] == from) {
                 result[i] = to;
@@ -113,10 +126,10 @@ public class VectorDouble {
 
     // Replace values in v where mask is not 0
     public static VectorDouble replace(VectorDouble v, VectorDouble mask, double value) {
-        if (v.elements.length != mask.elements.length) {
+        if (v.size != mask.size) {
             throw new IllegalArgumentException("Vectors must have the same length");
         }
-        double[] result = Arrays.copyOf(v.elements, v.elements.length);
+        double[] result = Arrays.copyOf(v.elements, v.size);
         for (int i = 0; i < result.length; i++) {
             if (mask.elements[i] != 0) {
                 result[i] = value;
@@ -137,9 +150,9 @@ public class VectorDouble {
 
     // Cumulative sum of elements
     public static VectorDouble cumulativeSum(VectorDouble v) {
-        double[] result = new double[v.elements.length];
+        double[] result = new double[v.size];
         double sum = 0;
-        for (int i = 0; i < v.elements.length; i++) {
+        for (int i = 0; i < v.size; i++) {
             sum += v.elements[i];
             result[i] = sum;
         }
@@ -148,9 +161,9 @@ public class VectorDouble {
 
     // Cumulative product of elements
     public static VectorDouble cumulativeProduct(VectorDouble v) {
-        double[] result = new double[v.elements.length];
+        double[] result = new double[v.size];
         double product = 1;
-        for (int i = 0; i < v.elements.length; i++) {
+        for (int i = 0; i < v.size; i++) {
             product *= v.elements[i];
             result[i] = product;
         }
@@ -164,10 +177,10 @@ public class VectorDouble {
      * @return Vector containing running maximum values
      */
     public static VectorDouble maximumAccumulate(VectorDouble v) {
-        double[] result = new double[v.elements.length];
-        if (v.elements.length > 0) {
+        double[] result = new double[v.size];
+        if (v.size > 0) {
             result[0] = v.elements[0];
-            for (int i = 1; i < v.elements.length; i++) {
+            for (int i = 1; i < v.size; i++) {
                 result[i] = Math.max(result[i - 1], v.elements[i]);
             }
         }
@@ -181,10 +194,10 @@ public class VectorDouble {
      * @return Vector containing running minimum values
      */
     public static VectorDouble minimumAccumulate(VectorDouble v) {
-        double[] result = new double[v.elements.length];
-        if (v.elements.length > 0) {
+        double[] result = new double[v.size];
+        if (v.size > 0) {
             result[0] = v.elements[0];
-            for (int i = 1; i < v.elements.length; i++) {
+            for (int i = 1; i < v.size; i++) {
                 result[i] = Math.min(result[i - 1], v.elements[i]);
             }
         }
@@ -193,55 +206,55 @@ public class VectorDouble {
 
     // Replace the add, subtract, multiply, divide, power methods with:
     public static VectorDouble add(VectorDouble v1, VectorDouble v2) {
-        if (v1.elements.length != v2.elements.length) {
+        if (v1.size != v2.size) {
             throw new IllegalArgumentException("Vectors must have the same length");
         }
-        double[] result = new double[v1.elements.length];
-        for (int i = 0; i < v1.elements.length; i++) {
+        double[] result = new double[v1.size];
+        for (int i = 0; i < v1.size; i++) {
             result[i] = v1.elements[i] + v2.elements[i];
         }
         return new VectorDouble(result);
     }
 
     public static VectorDouble subtract(VectorDouble v1, VectorDouble v2) {
-        if (v1.elements.length != v2.elements.length) {
+        if (v1.size != v2.size) {
             throw new IllegalArgumentException("Vectors must have the same length");
         }
-        double[] result = new double[v1.elements.length];
-        for (int i = 0; i < v1.elements.length; i++) {
+        double[] result = new double[v1.size];
+        for (int i = 0; i < v1.size; i++) {
             result[i] = v1.elements[i] - v2.elements[i];
         }
         return new VectorDouble(result);
     }
 
     public static VectorDouble multiply(VectorDouble v1, VectorDouble v2) {
-        if (v1.elements.length != v2.elements.length) {
+        if (v1.size != v2.size) {
             throw new IllegalArgumentException("Vectors must have the same length");
         }
-        double[] result = new double[v1.elements.length];
-        for (int i = 0; i < v1.elements.length; i++) {
+        double[] result = new double[v1.size];
+        for (int i = 0; i < v1.size; i++) {
             result[i] = v1.elements[i] * v2.elements[i];
         }
         return new VectorDouble(result);
     }
 
     public static VectorDouble divide(VectorDouble v1, VectorDouble v2) {
-        if (v1.elements.length != v2.elements.length) {
+        if (v1.size != v2.size) {
             throw new IllegalArgumentException("Vectors must have the same length");
         }
-        double[] result = new double[v1.elements.length];
-        for (int i = 0; i < v1.elements.length; i++) {
+        double[] result = new double[v1.size];
+        for (int i = 0; i < v1.size; i++) {
             result[i] = v2.elements[i] != 0 ? v1.elements[i] / v2.elements[i] : (v2.elements[i] >= 0 ? Double.POSITIVE_INFINITY : Double.NEGATIVE_INFINITY);
         }
         return new VectorDouble(result);
     }
 
     public static VectorDouble power(VectorDouble v1, VectorDouble v2) {
-        if (v1.elements.length != v2.elements.length) {
+        if (v1.size != v2.size) {
             throw new IllegalArgumentException("Vectors must have the same length");
         }
-        double[] result = new double[v1.elements.length];
-        for (int i = 0; i < v1.elements.length; i++) {
+        double[] result = new double[v1.size];
+        for (int i = 0; i < v1.size; i++) {
             result[i] = Math.pow(v1.elements[i], v2.elements[i]);
         }
         return new VectorDouble(result);
@@ -249,11 +262,11 @@ public class VectorDouble {
 
     // Similarly update min/max methods:
     public static VectorDouble min(VectorDouble v1, VectorDouble v2) {
-        if (v1.elements.length != v2.elements.length) {
+        if (v1.size != v2.size) {
             throw new IllegalArgumentException("Vectors must have the same length");
         }
-        double[] result = new double[v1.elements.length];
-        for (int i = 0; i < v1.elements.length; i++) {
+        double[] result = new double[v1.size];
+        for (int i = 0; i < v1.size; i++) {
             if ((!Double.isNaN(v1.elements[i])) && (!Double.isNaN(v2.elements[i]))) {
                 result[i] = Math.min(v1.elements[i], v2.elements[i]);
             } else if (Double.isNaN(v1.elements[i])) {
@@ -266,11 +279,11 @@ public class VectorDouble {
     }
 
     public static VectorDouble max(VectorDouble v1, VectorDouble v2) {
-        if (v1.elements.length != v2.elements.length) {
+        if (v1.size != v2.size) {
             throw new IllegalArgumentException("Vectors must have the same length");
         }
-        double[] result = new double[v1.elements.length];
-        for (int i = 0; i < v1.elements.length; i++) {
+        double[] result = new double[v1.size];
+        for (int i = 0; i < v1.size; i++) {
             result[i] = Math.max(v1.elements[i], v2.elements[i]);
         }
         return new VectorDouble(result);
@@ -278,92 +291,159 @@ public class VectorDouble {
 
     // Replace scalar operation methods
     public static VectorDouble min(VectorDouble v, double scalar) {
-        double[] result = new double[v.elements.length];
-        for (int i = 0; i < v.elements.length; i++) {
+        double[] result = new double[v.size];
+        for (int i = 0; i < v.size; i++) {
             result[i] = Math.min(v.elements[i], scalar);
         }
         return new VectorDouble(result);
     }
 
     public static VectorDouble max(VectorDouble v, double scalar) {
-        double[] result = new double[v.elements.length];
-        for (int i = 0; i < v.elements.length; i++) {
+        double[] result = new double[v.size];
+        for (int i = 0; i < v.size; i++) {
             result[i] = Math.max(v.elements[i], scalar);
         }
         return new VectorDouble(result);
     }
 
+    public VectorDouble add(double scalar) {
+        for (int i = 0; i < size; i++) {
+            elements[i] = elements[i] + scalar;
+        }
+        return this;
+    }
+
     public static VectorDouble add(VectorDouble v, double scalar) {
-        double[] result = new double[v.elements.length];
-        for (int i = 0; i < v.elements.length; i++) {
+        double[] result = new double[v.size];
+        for (int i = 0; i < v.size; i++) {
             result[i] = v.elements[i] + scalar;
         }
         return new VectorDouble(result);
     }
 
+    public VectorDouble subtract(double scalar) {
+        for (int i = 0; i < size; i++) {
+            elements[i] = elements[i] - scalar;
+        }
+        return this;
+    }
+
     public static VectorDouble subtract(VectorDouble v, double scalar) {
-        double[] result = new double[v.elements.length];
-        for (int i = 0; i < v.elements.length; i++) {
+        double[] result = new double[v.size];
+        for (int i = 0; i < v.size; i++) {
             result[i] = v.elements[i] - scalar;
         }
         return new VectorDouble(result);
     }
 
+    public VectorDouble multiply(double scalar) {
+        for (int i = 0; i < size; i++) {
+            elements[i] = elements[i] * scalar;
+        }
+        return this;
+    }
+
     public static VectorDouble multiply(VectorDouble v, double scalar) {
-        double[] result = new double[v.elements.length];
-        for (int i = 0; i < v.elements.length; i++) {
+        double[] result = new double[v.size];
+        for (int i = 0; i < v.size; i++) {
             result[i] = v.elements[i] * scalar;
         }
         return new VectorDouble(result);
     }
 
+    public VectorDouble divide(double scalar) {
+        for (int i = 0; i < size; i++) {
+            elements[i] = scalar != 0 ? elements[i] / scalar : (scalar >= 0 ? Double.POSITIVE_INFINITY : Double.NEGATIVE_INFINITY);
+        }
+        return this;
+    }
+
     public static VectorDouble divide(VectorDouble v, double scalar) {
-        double[] result = new double[v.elements.length];
-        for (int i = 0; i < v.elements.length; i++) {
+        double[] result = new double[v.size];
+        for (int i = 0; i < v.size; i++) {
             result[i] = scalar != 0 ? v.elements[i] / scalar : (scalar >= 0 ? Double.POSITIVE_INFINITY : Double.NEGATIVE_INFINITY);
         }
         return new VectorDouble(result);
     }
 
+    public VectorDouble power(double scalar) {
+        for (int i = 0; i < size; i++) {
+            elements[i] = Math.pow(elements[i], scalar);
+        }
+        return this;
+    }
+
     public static VectorDouble power(VectorDouble v, double scalar) {
-        double[] result = new double[v.elements.length];
-        for (int i = 0; i < v.elements.length; i++) {
+        double[] result = new double[v.size];
+        for (int i = 0; i < v.size; i++) {
             result[i] = Math.pow(v.elements[i], scalar);
         }
         return new VectorDouble(result);
     }
 
     // Scalar divided by vector (1/x elementwise)
+    public VectorDouble idivide(double scalar) {
+        for (int i = 0; i < size; i++) {
+            elements[i] = elements[i] != 0 ? scalar / elements[i] : (scalar >= 0 ? Double.POSITIVE_INFINITY : Double.NEGATIVE_INFINITY);
+        }
+        return this;
+    }
+
+    // Scalar divided by vector (1/x elementwise)
     public static VectorDouble divide(double scalar, VectorDouble v) {
-        double[] result = new double[v.elements.length];
-        for (int i = 0; i < v.elements.length; i++) {
+        double[] result = new double[v.size];
+        for (int i = 0; i < v.size; i++) {
             result[i] = v.elements[i] != 0 ? scalar / v.elements[i] : (scalar >= 0 ? Double.POSITIVE_INFINITY : Double.NEGATIVE_INFINITY);
         }
         return new VectorDouble(result);
     }
 
     // Scalar minus vector (scalar - each element)
+    public VectorDouble isubtract(double scalar) {
+        for (int i = 0; i < size; i++) {
+            elements[i] = scalar - elements[i];
+        }
+        return this;
+    }
+
+    // Scalar minus vector (scalar - each element)
     public static VectorDouble subtract(double scalar, VectorDouble v) {
-        double[] result = new double[v.elements.length];
-        for (int i = 0; i < v.elements.length; i++) {
+        double[] result = new double[v.size];
+        for (int i = 0; i < v.size; i++) {
             result[i] = scalar - v.elements[i];
         }
         return new VectorDouble(result);
     }
 
     // Elementwise square root
+    public VectorDouble sqrt() {
+        for (int i = 0; i < size; i++) {
+            elements[i] = Math.sqrt(elements[i]);
+        }
+        return this;
+    }
+
+    // Elementwise square root
     public static VectorDouble sqrt(VectorDouble v) {
-        double[] result = new double[v.elements.length];
-        for (int i = 0; i < v.elements.length; i++) {
+        double[] result = new double[v.size];
+        for (int i = 0; i < v.size; i++) {
             result[i] = Math.sqrt(v.elements[i]);
         }
         return new VectorDouble(result);
     }
 
     // Elementwise natural logarithm
+    public VectorDouble log() {
+        for (int i = 0; i < size; i++) {
+            elements[i] = Math.log(elements[i]);
+        }
+        return this;
+    }
+
+    // Elementwise natural logarithm
     public static VectorDouble log(VectorDouble v) {
-        double[] result = new double[v.elements.length];
-        for (int i = 0; i < v.elements.length; i++) {
+        double[] result = new double[v.size];
+        for (int i = 0; i < v.size; i++) {
             result[i] = Math.log(v.elements[i]);
         }
         return new VectorDouble(result);
@@ -371,96 +451,96 @@ public class VectorDouble {
 
     // Elementwise comparison operations
     public static VectorDouble equals(VectorDouble v1, VectorDouble v2) {
-        double[] result = new double[v1.elements.length];
-        for (int i = 0; i < v1.elements.length; i++) {
+        double[] result = new double[v1.size];
+        for (int i = 0; i < v1.size; i++) {
             result[i] = v1.elements[i] == v2.elements[i] ? 1.0 : 0.0;
         }
         return new VectorDouble(result);
     }
 
     public static VectorDouble notEquals(VectorDouble v1, VectorDouble v2) {
-        double[] result = new double[v1.elements.length];
-        for (int i = 0; i < v1.elements.length; i++) {
+        double[] result = new double[v1.size];
+        for (int i = 0; i < v1.size; i++) {
             result[i] = v1.elements[i] != v2.elements[i] ? 1.0 : 0.0;
         }
         return new VectorDouble(result);
     }
 
     public static VectorDouble lessThan(VectorDouble v1, VectorDouble v2) {
-        double[] result = new double[v1.elements.length];
-        for (int i = 0; i < v1.elements.length; i++) {
+        double[] result = new double[v1.size];
+        for (int i = 0; i < v1.size; i++) {
             result[i] = v1.elements[i] < v2.elements[i] ? 1.0 : 0.0;
         }
         return new VectorDouble(result);
     }
 
     public static VectorDouble lessThanOrEqual(VectorDouble v1, VectorDouble v2) {
-        double[] result = new double[v1.elements.length];
-        for (int i = 0; i < v1.elements.length; i++) {
+        double[] result = new double[v1.size];
+        for (int i = 0; i < v1.size; i++) {
             result[i] = v1.elements[i] <= v2.elements[i] ? 1.0 : 0.0;
         }
         return new VectorDouble(result);
     }
 
     public static VectorDouble greaterThan(VectorDouble v1, VectorDouble v2) {
-        double[] result = new double[v1.elements.length];
-        for (int i = 0; i < v1.elements.length; i++) {
+        double[] result = new double[v1.size];
+        for (int i = 0; i < v1.size; i++) {
             result[i] = v1.elements[i] > v2.elements[i] ? 1.0 : 0.0;
         }
         return new VectorDouble(result);
     }
 
     public static VectorDouble greaterThanOrEqual(VectorDouble v1, VectorDouble v2) {
-        double[] result = new double[v1.elements.length];
-        for (int i = 0; i < v1.elements.length; i++) {
+        double[] result = new double[v1.size];
+        for (int i = 0; i < v1.size; i++) {
             result[i] = v1.elements[i] >= v2.elements[i] ? 1.0 : 0.0;
         }
         return new VectorDouble(result);
     }
 
     public static VectorDouble equals(VectorDouble v, double scalar) {
-        double[] result = new double[v.elements.length];
-        for (int i = 0; i < v.elements.length; i++) {
+        double[] result = new double[v.size];
+        for (int i = 0; i < v.size; i++) {
             result[i] = v.elements[i] == scalar ? 1.0 : 0.0;
         }
         return new VectorDouble(result);
     }
 
     public static VectorDouble notEquals(VectorDouble v, double scalar) {
-        double[] result = new double[v.elements.length];
-        for (int i = 0; i < v.elements.length; i++) {
+        double[] result = new double[v.size];
+        for (int i = 0; i < v.size; i++) {
             result[i] = v.elements[i] != scalar ? 1.0 : 0.0;
         }
         return new VectorDouble(result);
     }
 
     public static VectorDouble lessThan(VectorDouble v, double scalar) {
-        double[] result = new double[v.elements.length];
-        for (int i = 0; i < v.elements.length; i++) {
+        double[] result = new double[v.size];
+        for (int i = 0; i < v.size; i++) {
             result[i] = v.elements[i] < scalar ? 1.0 : 0.0;
         }
         return new VectorDouble(result);
     }
 
     public static VectorDouble lessThanOrEqual(VectorDouble v, double scalar) {
-        double[] result = new double[v.elements.length];
-        for (int i = 0; i < v.elements.length; i++) {
+        double[] result = new double[v.size];
+        for (int i = 0; i < v.size; i++) {
             result[i] = v.elements[i] <= scalar ? 1.0 : 0.0;
         }
         return new VectorDouble(result);
     }
 
     public static VectorDouble greaterThan(VectorDouble v, double scalar) {
-        double[] result = new double[v.elements.length];
-        for (int i = 0; i < v.elements.length; i++) {
+        double[] result = new double[v.size];
+        for (int i = 0; i < v.size; i++) {
             result[i] = v.elements[i] > scalar ? 1.0 : 0.0;
         }
         return new VectorDouble(result);
     }
 
     public static VectorDouble greaterThanOrEqual(VectorDouble v, double scalar) {
-        double[] result = new double[v.elements.length];
-        for (int i = 0; i < v.elements.length; i++) {
+        double[] result = new double[v.size];
+        for (int i = 0; i < v.size; i++) {
             result[i] = v.elements[i] >= scalar ? 1.0 : 0.0;
         }
         return new VectorDouble(result);
@@ -468,40 +548,40 @@ public class VectorDouble {
 
     // Elementwise logical operations
     public static VectorDouble and(VectorDouble v1, VectorDouble v2) {
-        double[] result = new double[v1.elements.length];
-        for (int i = 0; i < v1.elements.length; i++) {
+        double[] result = new double[v1.size];
+        for (int i = 0; i < v1.size; i++) {
             result[i] = (v1.elements[i] != 0 && v2.elements[i] != 0) ? 1.0 : 0.0;
         }
         return new VectorDouble(result);
     }
 
     public static VectorDouble or(VectorDouble v1, VectorDouble v2) {
-        double[] result = new double[v1.elements.length];
-        for (int i = 0; i < v1.elements.length; i++) {
+        double[] result = new double[v1.size];
+        for (int i = 0; i < v1.size; i++) {
             result[i] = (v1.elements[i] != 0 || v2.elements[i] != 0) ? 1.0 : 0.0;
         }
         return new VectorDouble(result);
     }
 
     public static VectorDouble not(VectorDouble v) {
-        double[] result = new double[v.elements.length];
-        for (int i = 0; i < v.elements.length; i++) {
+        double[] result = new double[v.size];
+        for (int i = 0; i < v.size; i++) {
             result[i] = v.elements[i] == 0 ? 1.0 : 0.0;
         }
         return new VectorDouble(result);
     }
 
     public static VectorDouble and(VectorDouble v, double scalar) {
-        double[] result = new double[v.elements.length];
-        for (int i = 0; i < v.elements.length; i++) {
+        double[] result = new double[v.size];
+        for (int i = 0; i < v.size; i++) {
             result[i] = (v.elements[i] != 0 && scalar != 0) ? 1.0 : 0.0;
         }
         return new VectorDouble(result);
     }
 
     public static VectorDouble or(VectorDouble v, double scalar) {
-        double[] result = new double[v.elements.length];
-        for (int i = 0; i < v.elements.length; i++) {
+        double[] result = new double[v.size];
+        for (int i = 0; i < v.size; i++) {
             result[i] = (v.elements[i] != 0 || scalar != 0) ? 1.0 : 0.0;
         }
         return new VectorDouble(result);
@@ -538,7 +618,7 @@ public class VectorDouble {
         // Create array with indices of non-zero elements
         int[] indices = new int[count];
         int index = 0;
-        for (int i = 0; i < v.elements.length; i++) {
+        for (int i = 0; i < v.size; i++) {
             if (v.elements[i] != 0) {
                 indices[index++] = i;
             }
