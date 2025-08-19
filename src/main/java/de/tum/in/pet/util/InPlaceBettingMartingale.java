@@ -116,11 +116,16 @@ public class InPlaceBettingMartingale {
     }
 
     public Pair<Double, Double> confidence_width(double low, double high) {
-        int iter_count = 20;
+        int iter_count = 10; // precision: 2 ^ (-iter_count)
         double precision = 1e-8;
         double delta = 1e-6;
         return new Pair<>(heuristic_search(low, high, iter_count, true, precision, delta), heuristic_search(low, high, iter_count, false, precision, delta));
     }
 
-    public Pair<Double, Double> confidence_width() { return confidence; }
+    public Pair<Double, Double> confidence_width() { 
+        if (aggregate_cache.isEmpty() && samples.size() > 0) {
+            confidence = confidence_width(confidence.first, confidence.second);
+        }
+        return confidence;
+    }
 }
