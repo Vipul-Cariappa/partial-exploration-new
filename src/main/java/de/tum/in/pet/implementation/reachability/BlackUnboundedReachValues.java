@@ -89,7 +89,7 @@ public class BlackUnboundedReachValues extends UnboundedReachValues{
    * @return Bounds of an action from a state with some confidence width.
    */
   private Bounds successorBounds(int state, Distribution distribution, double confidenceWidth) {
-    if (distribution.support().size()==0){
+    if (distribution.support().size()==0){ // XXX: the confidenceWidth is different for each entry in the distribution
       return Bounds.reachUnknown();
     }
     double lower = 0.0d;
@@ -100,7 +100,7 @@ public class BlackUnboundedReachValues extends UnboundedReachValues{
     for (Int2DoubleMap.Entry entry : distribution) {
       int successor = entry.getIntKey();
       Bounds successorBounds = bounds(successor);
-      double probability = Math.max(0, entry.getDoubleValue()-confidenceWidth);
+      double probability = Math.max(0, entry.getDoubleValue()-confidenceWidth); // XXX: Use the means computed by martingale
       sum += probability;
       lower += successorBounds.lowerBound() * probability;
       upper += successorBounds.upperBound() * probability;

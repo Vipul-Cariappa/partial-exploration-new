@@ -1,68 +1,67 @@
 package de.tum.in.pet.util;
 
 public class BettingMartingale {
-    static VectorDouble betting_mart(VectorDouble x, VectorDouble lambda_positive, double m, double alpha, double theta, double trunc_scale) {
+    VectorDouble samples;
+    double cacheAlpha = -1.0;
+    double cacheGridWidth = -1.0;
+    int cacheSize = 0;
+    Pair<Double, Double> confidenceWidth = new Pair<Double,Double>(-1.0, -1.0);
+
+    BettingMartingale() {
+        samples = new VectorDouble();
+    }
+
+    public void observe(double x) {
+        samples.append(x);  // TODO: add aggregation
+    }
+
+    public Pair<Double, Double> confidenceWidth(double alpha, double gridWidth) {
+        if (cacheSize == samples.size() && cacheAlpha == alpha && cacheGridWidth == gridWidth)
+            return confidenceWidth;
+        cacheSize = samples.size();
+        cacheAlpha = alpha;
+        cacheGridWidth = gridWidth;
+        confidenceWidth = BettingMartingale.confidence_width(
+            samples,
+            (int)(1.0/gridWidth),
+            0.0,
+            1.0,
+            alpha,
+            true,
+            0.5,
+            0.5
+        );
+        return confidenceWidth;
+    }
+
+    static VectorDouble betting_mart(VectorDouble x, VectorDouble lambdas, double m, double alpha, double theta, double trunc_scale) {
         // alpha = 0.05;
         // theta = 0.5;
         // trunc_scale = 0.5;
 
-        VectorDouble mu_t = VectorDouble.filled(x.size(), m);
-        VectorDouble lambda_negative = VectorDouble.copy(lambda_positive);
+        VectorDouble lambda_positive = VectorDouble.min(lambdas, trunc_scale / m);
+        lambda_positive.max((-trunc_scale) / (1 - m));
 
-        assert (0 < trunc_scale) && (trunc_scale <= 1);
+        VectorDouble lambda_negative = VectorDouble.min(lambdas, trunc_scale / (1 - m));
+        lambda_negative.max((-trunc_scale) / m);
 
-        lambda_positive = VectorDouble.min(lambda_positive, VectorDouble.divide(trunc_scale, mu_t));
-        lambda_positive = VectorDouble.max(lambda_positive, VectorDouble.divide(-trunc_scale, VectorDouble.subtract(1, mu_t)));
+        VectorDouble x_minus_mu_t = VectorDouble.subtract(x, m);
+        VectorDouble multiplicand_positive = lambda_positive.multiply(x_minus_mu_t).add(1);
+        VectorDouble multiplicand_negative = lambda_negative.multiply(x_minus_mu_t).isubtract(1);
 
-        lambda_negative = VectorDouble.min(lambda_negative, VectorDouble.divide(trunc_scale, VectorDouble.subtract(1, mu_t)));
-        lambda_negative = VectorDouble.max(lambda_negative, VectorDouble.divide(-trunc_scale, mu_t));
-
-        VectorDouble multiplicand_positive = VectorDouble.add(VectorDouble.multiply(lambda_positive, VectorDouble.subtract(x, mu_t)), 1);
-        VectorDouble multiplicand_negative = VectorDouble.subtract(1, VectorDouble.multiply(lambda_negative, VectorDouble.subtract(x, mu_t)));
-
-        multiplicand_positive = VectorDouble.replace(
-                multiplicand_positive,
-                VectorDouble.and(
-                        VectorDouble.equals(lambda_positive, Double.POSITIVE_INFINITY), // ???: Is POSITIVE_INFINITY != NEGATIVE_INFINITY
-                        VectorDouble.equals(lambda_positive, VectorDouble.subtract(x, mu_t))
-                ),
-                1.0
-        );
-        multiplicand_negative = VectorDouble.replace(
-                multiplicand_negative,
-                VectorDouble.and(
-                        VectorDouble.equals(lambda_negative, Double.POSITIVE_INFINITY), // ???: Is POSITIVE_INFINITY != NEGATIVE_INFINITY
-                        VectorDouble.equals(lambda_negative, VectorDouble.subtract(x, mu_t))
-                ),
-                1.0
-        );
-
-        VectorDouble capital_process_positive = VectorDouble.replace(VectorDouble.cumulativeProduct(multiplicand_positive), Double.NaN, 0);
-        VectorDouble capital_process_negative = VectorDouble.replace(VectorDouble.cumulativeProduct(multiplicand_negative), Double.NaN, 0);
+        VectorDouble capital_process_positive = multiplicand_positive.cumulativeProduct().replace(Double.NaN, 0);
+        VectorDouble capital_process_negative = multiplicand_negative.cumulativeProduct().replace(Double.NaN, 0);
 
         VectorDouble capital_process;
         if (theta == 1) {
-            capital_process = VectorDouble.multiply(capital_process_positive, theta);
+            capital_process = capital_process_positive.multiply(theta);
         } else if (theta == 0) {
-            capital_process = VectorDouble.multiply(capital_process_negative, 1 - theta);
+            capital_process = capital_process_negative.multiply(1 - theta);
         } else {
-            capital_process = VectorDouble.max(
-                    VectorDouble.multiply(capital_process_positive, theta),
-                    VectorDouble.multiply(capital_process_negative, 1 - theta)
+            capital_process = capital_process_positive.multiply(theta).max(
+                    capital_process_negative.multiply(1 - theta)
             );
         }
-
-        capital_process = VectorDouble.replace(
-                capital_process,
-                VectorDouble.or(
-                        VectorDouble.lessThan(mu_t, 0),
-                        VectorDouble.greaterThan(mu_t, 1)
-                ),
-                Double.POSITIVE_INFINITY
-        );
-
-        assert VectorDouble.all(VectorDouble.greaterThanOrEqual(capital_process, 0));
-        assert VectorDouble.all(VectorDouble.notEquals(capital_process, Double.NaN));
 
         return capital_process;
     }
@@ -77,13 +76,11 @@ public class BettingMartingale {
         } else if (theta == 0) {
             mart = mart_negative;
         } else {
-            mart = VectorDouble.max(
-                    VectorDouble.multiply(mart_positive, theta),
-                    VectorDouble.multiply(mart_negative, 1 - theta)
+            mart = mart_positive.multiply(theta).max(
+                    mart_negative.multiply(1 - theta)
             );
         }
 
-        assert VectorDouble.all(VectorDouble.notEquals(mart, Double.NaN));
         return mart;
     }
 

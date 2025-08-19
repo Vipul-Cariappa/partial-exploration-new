@@ -54,7 +54,7 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
   protected static final double initialNSamples = 1e4;
   protected static final double multiplicativeFactor = 5;
 
-  protected HashMap<Integer, HashMap<Integer, HashMap<Integer, Pair<InPlaceBettingMartingale, Pair<Double, Double>>>>> in_place_martingale = new HashMap<>();
+  protected HashMap<Integer, HashMap<Integer, Pair<HashMap<Integer, InPlaceBettingMartingale>, Pair<Integer, Integer>>>> in_place_martingale = new HashMap<>();
 
   public BlackOnDemandValueIterator(Explorer<S, M> explorer, UnboundedValues values, RewardGenerator<S> rewardGenerator,
                                     int revisitThreshold, double rMax, double pMin, double errorTolerance,
@@ -83,34 +83,45 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
     // returns the confidenceWidth for a state x and an action with index y. if y is greater than the number of choices
     // the explorer holds, it must be the stay action. We set confidence width of stay action equal to zero as we
     // know the probabilities of the action are accurate as they have been calculated and not learned.
-    Int2ObjectFunction<Int2DoubleFunction> confidenceWidthFunction;
+    Int2ObjectFunction<Int2ObjectFunction<Int2ObjectFunction<Pair<Double, Double>>>> confidenceWidthFunction;
     if (transitionProbabilityMethod == TransitionProbabilityMethod.Hoeffding) {
-      confidenceWidthFunction = state -> (action -> action < explorer.getChoices(state).size()
-              ? Math.sqrt(-Math.log(transDelta) / (2 * explorer_.getActionCounts(state, action)))
-              : 0);
-    } else {
-      confidenceWidthFunction = state -> (action -> {
+      confidenceWidthFunction = state -> (action -> nextState -> {
         if (action >= explorer.getChoices(state).size()) {
-          return 0d;
+          return new Pair<>(-1.0, -1.0);
         }
-        HashMap<Integer, HashMap<Integer, Pair<InPlaceBettingMartingale, Pair<Double, Double>>>> actionMartingale = in_place_martingale.get(state);
-        if (actionMartingale == null) { return 1d; }
-
-        HashMap<Integer, Pair<InPlaceBettingMartingale, Pair<Double, Double>>> nextStateMartingale = actionMartingale.get(action);
-        if (nextStateMartingale == null) { return 1d; }
-
-        double max = Double.NEGATIVE_INFINITY;
-        for (var pair: nextStateMartingale.entrySet()) {
-          InPlaceBettingMartingale martingale = pair.getValue().first;
-          Pair<Double, Double> valuePair = martingale.getConfidenceWidth();
-          double value = valuePair.second - valuePair.first;
-          if (max < value) {
-            max = value;
-          }
-          pair.getValue().second.first = valuePair.first;
-          pair.getValue().second.second = valuePair.second;
+        double confidenceWidth = Math.sqrt(-Math.log(transDelta) / (2 * explorer_.getActionCounts(state, action)));
+        double probability = explorer.getChoices(state).get(action).get(nextState);
+        return new Pair<>(Math.max(0.0, probability - confidenceWidth),
+                Math.min(1.0, probability + confidenceWidth));
+      });
+    } else {
+      confidenceWidthFunction = state -> (action -> nextState -> {
+        if (action >= explorer.getChoices(state).size()) {
+          return new Pair<>(-1.0, -1.0);
         }
-        return max;
+
+        HashMap<Integer, Pair<HashMap<Integer, InPlaceBettingMartingale>, Pair<Integer, Integer>>> actionMartingale = in_place_martingale.get(state);
+        if (actionMartingale == null) {
+          return new Pair<>(0.0, 1.0);
+        }
+
+        Pair<HashMap<Integer, InPlaceBettingMartingale>, Pair<Integer, Integer>> nextStateMartingale = actionMartingale.get(action);
+        if (nextStateMartingale == null) {
+          return new Pair<>(0.0, 1.0);
+        }
+
+        int seenState = actionMartingale.get(action).second.first;
+        int secondSeenState = actionMartingale.get(action).second.second;
+        HashMap<Integer, InPlaceBettingMartingale> nextStateMartingaleMap = nextStateMartingale.first;
+
+        if (nextStateMartingaleMap.containsKey(nextState)) {
+          return nextStateMartingaleMap.get(nextState).getConfidenceWidth();
+        }
+        if (nextState == seenState || nextState == secondSeenState) {
+          Pair<Double, Double> confidence = nextStateMartingaleMap.get(seenState).getConfidenceWidth();
+          return new Pair<>(1 - confidence.second, 1 - confidence.first);
+        }
+        return new Pair<>(0.0, 1.0);
       });
     }
 
@@ -126,22 +137,60 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
 
   public void updateMartingaleTransitions(int currentState, int actionIndex, int nextState) {
     in_place_martingale.putIfAbsent(currentState, new HashMap<>());
-    HashMap<Integer, HashMap<Integer, Pair<InPlaceBettingMartingale, Pair<Double, Double>>>> actionMartingales = in_place_martingale.get(currentState);
+    HashMap<Integer, Pair<HashMap<Integer, InPlaceBettingMartingale>, Pair<Integer, Integer>>> actionMartingales = in_place_martingale.get(currentState);
 
-    actionMartingales.putIfAbsent(actionIndex, new HashMap<>());
-    HashMap<Integer, Pair<InPlaceBettingMartingale, Pair<Double, Double>>> nextStateMartingale = actionMartingales.get(actionIndex);
+    actionMartingales.putIfAbsent(actionIndex, new Pair<>(new HashMap<>(), new Pair<>(nextState, -1)));
+    HashMap<Integer, InPlaceBettingMartingale> nextStateMartingale = actionMartingales.get(actionIndex).first;
+    int seenState = actionMartingales.get(actionIndex).second.first;
+    int secondSeenState = actionMartingales.get(actionIndex).second.second;
 
-    // Get all possible nextStates
-    explorer.getActions(currentState).get(actionIndex).distribution().forEach((s, d) -> {
-      nextStateMartingale.putIfAbsent(s, new Pair<>(new InPlaceBettingMartingale(errorTolerance, aggregationCount), new Pair<>(0.0, 1.0)));
-
-      InPlaceBettingMartingale martingale = nextStateMartingale.get(s).first;
-      if (s == nextState) {
-        martingale.observe(1);
+    int num_next_states = nextStateMartingale.size();
+    if (num_next_states == 1) {
+      if (seenState == nextState) {
+        nextStateMartingale.get(seenState).observe(1);
+      } else if (secondSeenState == nextState) {
+        nextStateMartingale.get(seenState).observe(0);
+      } else if (secondSeenState == -1) {
+        actionMartingales.get(actionIndex).second.second = nextState;
+        nextStateMartingale.get(seenState).observe(0);
       } else {
-        martingale.observe(0);
+        // insert two next items into nextStateMartingale, create old samples
+        // second item
+        nextStateMartingale.put(secondSeenState, new InPlaceBettingMartingale(errorTolerance, aggregationCount));
+        InPlaceBettingMartingale second = nextStateMartingale.get(secondSeenState);
+        for (double i: second.samples.elements)
+          second.observe(1 - i); // ???: is this logic sound with aggregation
+
+          // third item
+        nextStateMartingale.put(nextState, new InPlaceBettingMartingale(errorTolerance, aggregationCount));
+        InPlaceBettingMartingale third = nextStateMartingale.get(nextState);
+        for (int i = 0; i < nextStateMartingale.get(seenState).size(); i++)
+          third.observe(0);
+
+        // insert this sample
+        nextStateMartingale.get(seenState).observe(0);
+        second.observe(0);
+        third.observe(1);
       }
-    });
+      return;
+    }
+
+    if (!nextStateMartingale.containsKey(nextState)) {
+      nextStateMartingale.put(nextState, new InPlaceBettingMartingale(errorTolerance, aggregationCount));
+      InPlaceBettingMartingale new_obs = nextStateMartingale.get(nextState);
+      for (int i = 0; i < nextStateMartingale.get(seenState).size(); i++)
+        new_obs.observe(0);
+    }
+
+    nextStateMartingale.forEach(
+      (state, mart) -> {
+        if (state == nextState) {
+          mart.observe(1);
+        } else {
+          mart.observe(0);
+        }
+      }
+    );
   }
 
   @Override
