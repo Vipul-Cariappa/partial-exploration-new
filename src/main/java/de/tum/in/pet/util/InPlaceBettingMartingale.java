@@ -14,10 +14,8 @@ public class InPlaceBettingMartingale {
     ArrayList<Double> aggregate_cache;
     Pair<Double, Double> confidence;
 
-    VectorDouble samples_cumulative_sum;
-    VectorDouble samples_mean_diff_sq;
-    VectorDouble mu_hat_t = new VectorDouble();
-    VectorDouble sigma2_t;
+    double samples_cumulative_sum;
+    double samples_mean_diff_sq;
     VectorDouble lambda = new VectorDouble();
 
     public InPlaceBettingMartingale(double alpha, double prior_mean, double prior_variance, double fake_obs, double scale, int aggregate) {
@@ -27,9 +25,8 @@ public class InPlaceBettingMartingale {
         this.fake_obs = fake_obs;
         this.scale = scale;
         this.samples_count = 0;
-        this.samples_cumulative_sum = new VectorDouble(0);
-        this.samples_mean_diff_sq = new VectorDouble(0);
-        this.sigma2_t = new VectorDouble(prior_variance);
+        this.samples_cumulative_sum = 0;
+        this.samples_mean_diff_sq = 0;
         this.aggregate = aggregate;
         this.confidence = new Pair<>(0.0, 1.0);
         this.aggregate_cache = new ArrayList<>();
@@ -52,21 +49,17 @@ public class InPlaceBettingMartingale {
         samples.append(sample);
         samples_count += 1;
 
-        double sample_cumulative_sum = sample + samples_cumulative_sum.at(samples_cumulative_sum.size() - 1);
-        samples_cumulative_sum.append(sample_cumulative_sum);
+        samples_cumulative_sum += sample;
 
         // lazy compute mut_hat_t
-        double mu_hat_t_i = Math.min((sample_cumulative_sum + fake_obs + prior_mean) / (samples_count + fake_obs), 1);
-        mu_hat_t.append(mu_hat_t_i);
+        double mu_hat_t = Math.min((samples_cumulative_sum + fake_obs + prior_mean) / (samples_count + fake_obs), 1);
         
         // lazy compute sigma2_t
-        double sample_mean_diff_sq = Math.pow(sample - mu_hat_t_i, 2) + samples_mean_diff_sq.at(samples_mean_diff_sq.size() - 1);
-        samples_mean_diff_sq.append(sample_mean_diff_sq);
-        double sigma2_t_i = ((sample_mean_diff_sq) + (fake_obs * prior_variance)) / (samples_count + fake_obs);
-        sigma2_t = VectorDouble.append(sigma2_t, sigma2_t_i);
+        samples_mean_diff_sq += Math.pow(sample - mu_hat_t, 2);
+        double sigma2_t = (samples_mean_diff_sq + (fake_obs * prior_variance)) / (samples_count + fake_obs);
 
         // lazy compute lambda
-        double lambda_i = Math.sqrt((2 * Math.log(1 / alpha)) / ((samples.size() * Math.log(samples.size() + 1)) * (sigma2_t_i)));
+        double lambda_i = Math.sqrt((2 * Math.log(1 / alpha)) / ((samples.size() * Math.log(samples.size() + 1)) * (sigma2_t)));
         lambda.append(lambda_i);
     }
 
@@ -78,32 +71,30 @@ public class InPlaceBettingMartingale {
         return new Pair<>(VectorDouble.index(l, l.size() - 1), VectorDouble.index(u, u.size() - 1));
     }
 
-    private boolean is_in_interval(double x) {
-        VectorDouble mart = BettingMartingale.diversified_betting_mart(samples, lambda, x, alpha, 0.5, 0.5);
-        double value = mart.at(mart.size() - 1);
-        return value < (1 / alpha);
-    }
-
-    private double derivative(double x, double delta) {
-        VectorDouble mart_neg = BettingMartingale.diversified_betting_mart(samples, lambda, x - delta, alpha, 0.5, 0.5);
-        VectorDouble mart_pos = BettingMartingale.diversified_betting_mart(samples, lambda, x + delta, alpha, 0.5, 0.5);
-        double d_neg = mart_neg.at(mart_neg.size() - 1);
-        double d_pos = mart_pos.at(mart_pos.size() - 1);
-        return d_pos - d_neg;
-    }
-
     public double heuristic_search(double low, double high, int iter_count, boolean find_low, double precision, double delta) {
         while ((precision <= (high - low)) && (iter_count >= 0)) {
             iter_count--;
             double mid = (high + low) / 2;
-            if (is_in_interval(mid)) {
+            double mart_mid = BettingMartingale.diversified_betting_mart(samples, lambda, mid, alpha, 0.5, 0.5).back();
+            if (mart_mid < (1 / alpha)) {
                 if (find_low)
                     high = mid;
                 else
                     low = mid;
             } else {
                 double compute_delta = Math.min(delta, (high - low) / 8);
-                double df = derivative(mid, compute_delta);
+                boolean pos = true;
+                if (mid + compute_delta > 1) {
+                    compute_delta = -compute_delta;
+                    pos = false;
+                }
+                double mart_mid_plus_h = BettingMartingale.diversified_betting_mart(samples, lambda, mid + compute_delta, alpha, 0.5, 0.5).back();
+                double df = 0;
+                if (pos) {
+                    df = mart_mid_plus_h - mart_mid;
+                } else {
+                    df = mart_mid - mart_mid_plus_h;
+                }
                 if (df > 0)
                     high = mid;
                 else
