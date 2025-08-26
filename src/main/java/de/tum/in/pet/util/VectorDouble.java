@@ -16,6 +16,8 @@ public class VectorDouble {
 
     public double at(int x) { return elements[x]; }
 
+    public double back() { return elements[size - 1]; }
+
     // Static initializers
     public static VectorDouble arange(double start, double stop, double step) {
         int size = (int) Math.ceil((stop - start) / step);
@@ -114,6 +116,15 @@ public class VectorDouble {
     }
 
     // Replace occurrences of a value
+    public VectorDouble replace(double from, double to) {
+        for (int i = 0; i < size; i++) {
+            if (elements[i] == from) {
+                elements[i] = to;
+            }
+        }
+        return this;
+    }
+
     public static VectorDouble replace(VectorDouble v, double from, double to) {
         double[] result = Arrays.copyOf(v.elements, v.size);
         for (int i = 0; i < result.length; i++) {
@@ -160,6 +171,15 @@ public class VectorDouble {
     }
 
     // Cumulative product of elements
+    public VectorDouble cumulativeProduct() {
+        double product = 1;
+        for (int i = 0; i < size; i++) {
+            product *= elements[i];
+            elements[i] = product;
+        }
+        return this;
+    }
+
     public static VectorDouble cumulativeProduct(VectorDouble v) {
         double[] result = new double[v.size];
         double product = 1;
@@ -216,6 +236,16 @@ public class VectorDouble {
         return new VectorDouble(result);
     }
 
+    public VectorDouble subtract(VectorDouble v2) {
+        if (size != v2.size) {
+            throw new IllegalArgumentException("Vectors must have the same length");
+        }
+        for (int i = 0; i < size; i++) {
+            elements[i] = elements[i] - v2.elements[i];
+        }
+        return this;
+    }
+
     public static VectorDouble subtract(VectorDouble v1, VectorDouble v2) {
         if (v1.size != v2.size) {
             throw new IllegalArgumentException("Vectors must have the same length");
@@ -225,6 +255,16 @@ public class VectorDouble {
             result[i] = v1.elements[i] - v2.elements[i];
         }
         return new VectorDouble(result);
+    }
+
+    public VectorDouble multiply(VectorDouble v2) {
+        if (size != v2.size) {
+            throw new IllegalArgumentException("Vectors must have the same length");
+        }
+        for (int i = 0; i < size; i++) {
+            elements[i] = elements[i] * v2.elements[i];
+        }
+        return this;
     }
 
     public static VectorDouble multiply(VectorDouble v1, VectorDouble v2) {
@@ -261,21 +301,47 @@ public class VectorDouble {
     }
 
     // Similarly update min/max methods:
+    public VectorDouble min(VectorDouble v2) {
+        if (size != v2.size) {
+            throw new IllegalArgumentException("Vectors must have the same length");
+        }
+        for (int i = 0; i < size; i++) {
+            elements[i] = Math.min(elements[i], v2.elements[i]);
+            // if ((!Double.isNaN(elements[i])) && (!Double.isNaN(v2.elements[i]))) {
+            // } else if (Double.isNaN(elements[i])) {
+            //     elements[i] = v2.elements[i];
+            // } else {
+            //     elements[i] = v2.elements[i];
+            // }
+        }
+        return this;
+    }
+
     public static VectorDouble min(VectorDouble v1, VectorDouble v2) {
         if (v1.size != v2.size) {
             throw new IllegalArgumentException("Vectors must have the same length");
         }
         double[] result = new double[v1.size];
         for (int i = 0; i < v1.size; i++) {
-            if ((!Double.isNaN(v1.elements[i])) && (!Double.isNaN(v2.elements[i]))) {
-                result[i] = Math.min(v1.elements[i], v2.elements[i]);
-            } else if (Double.isNaN(v1.elements[i])) {
-                result[i] = v2.elements[i];
-            } else {
-                result[i] = v2.elements[i];
-            }
+            result[i] = Math.min(v1.elements[i], v2.elements[i]);
+            // if ((!Double.isNaN(v1.elements[i])) && (!Double.isNaN(v2.elements[i]))) {
+            // } else if (Double.isNaN(v1.elements[i])) {
+            //     result[i] = v2.elements[i];
+            // } else {
+            //     result[i] = v2.elements[i];
+            // }
         }
         return new VectorDouble(result);
+    }
+
+    public VectorDouble max(VectorDouble v2) {
+        if (size != v2.size) {
+            throw new IllegalArgumentException("Vectors must have the same length");
+        }
+        for (int i = 0; i < size; i++) {
+            elements[i] = Math.max(elements[i], v2.elements[i]);
+        }
+        return this;
     }
 
     public static VectorDouble max(VectorDouble v1, VectorDouble v2) {
@@ -290,12 +356,26 @@ public class VectorDouble {
     }
 
     // Replace scalar operation methods
+    public VectorDouble min(double scalar) {
+        for (int i = 0; i < size; i++) {
+            elements[i] = Math.min(elements[i], scalar);
+        }
+        return this;
+    }
+
     public static VectorDouble min(VectorDouble v, double scalar) {
         double[] result = new double[v.size];
         for (int i = 0; i < v.size; i++) {
             result[i] = Math.min(v.elements[i], scalar);
         }
         return new VectorDouble(result);
+    }
+
+    public VectorDouble max(double scalar) {
+        for (int i = 0; i < size; i++) {
+            elements[i] = Math.max(elements[i], scalar);
+        }
+        return this;
     }
 
     public static VectorDouble max(VectorDouble v, double scalar) {

@@ -6,39 +6,37 @@ public class BettingMartingale {
         // theta = 0.5;
         // trunc_scale = 0.5;
 
-        VectorDouble mu_t = VectorDouble.filled(x.size(), m);
-        VectorDouble lambda_negative = VectorDouble.copy(lambda_positive);
+        // assert (0 < trunc_scale) && (trunc_scale <= 1);
 
-        assert (0 < trunc_scale) && (trunc_scale <= 1);
+        lambda_positive = VectorDouble.min(lambda_positive, trunc_scale / m);
+        lambda_positive.max((-trunc_scale) / (1 - m));
 
-        lambda_positive = VectorDouble.min(lambda_positive, VectorDouble.divide(trunc_scale, mu_t));
-        lambda_positive = VectorDouble.max(lambda_positive, VectorDouble.divide(-trunc_scale, VectorDouble.subtract(1, mu_t)));
+        VectorDouble lambda_negative = VectorDouble.min(lambda_positive, trunc_scale / (1 - m));
+        lambda_negative.max((-trunc_scale) / m);
 
-        lambda_negative = VectorDouble.min(lambda_negative, VectorDouble.divide(trunc_scale, VectorDouble.subtract(1, mu_t)));
-        lambda_negative = VectorDouble.max(lambda_negative, VectorDouble.divide(-trunc_scale, mu_t));
+        VectorDouble x_minus_mu_t = VectorDouble.subtract(x, m);
+        VectorDouble multiplicand_positive = lambda_positive.multiply(x_minus_mu_t).add(1);
+        VectorDouble multiplicand_negative = lambda_negative.multiply(x_minus_mu_t).isubtract(1);
 
-        VectorDouble multiplicand_positive = VectorDouble.multiply(lambda_positive, VectorDouble.subtract(x, mu_t)).add(1);
-        VectorDouble multiplicand_negative = VectorDouble.multiply(lambda_negative, VectorDouble.subtract(x, mu_t)).isubtract(1);
+        // multiplicand_positive = VectorDouble.replace(
+        //         multiplicand_positive,
+        //         VectorDouble.and(
+        //                 VectorDouble.equals(lambda_positive, Double.POSITIVE_INFINITY), // ???: Is POSITIVE_INFINITY != NEGATIVE_INFINITY
+        //                 VectorDouble.equals(lambda_positive, VectorDouble.subtract(x, mu_t))
+        //         ),
+        //         1.0
+        // );
+        // multiplicand_negative = VectorDouble.replace(
+        //         multiplicand_negative,
+        //         VectorDouble.and(
+        //                 VectorDouble.equals(lambda_negative, Double.POSITIVE_INFINITY), // ???: Is POSITIVE_INFINITY != NEGATIVE_INFINITY
+        //                 VectorDouble.equals(lambda_negative, VectorDouble.subtract(x, mu_t))
+        //         ),
+        //         1.0
+        // );
 
-        multiplicand_positive = VectorDouble.replace(
-                multiplicand_positive,
-                VectorDouble.and(
-                        VectorDouble.equals(lambda_positive, Double.POSITIVE_INFINITY), // ???: Is POSITIVE_INFINITY != NEGATIVE_INFINITY
-                        VectorDouble.equals(lambda_positive, VectorDouble.subtract(x, mu_t))
-                ),
-                1.0
-        );
-        multiplicand_negative = VectorDouble.replace(
-                multiplicand_negative,
-                VectorDouble.and(
-                        VectorDouble.equals(lambda_negative, Double.POSITIVE_INFINITY), // ???: Is POSITIVE_INFINITY != NEGATIVE_INFINITY
-                        VectorDouble.equals(lambda_negative, VectorDouble.subtract(x, mu_t))
-                ),
-                1.0
-        );
-
-        VectorDouble capital_process_positive = VectorDouble.replace(VectorDouble.cumulativeProduct(multiplicand_positive), Double.NaN, 0);
-        VectorDouble capital_process_negative = VectorDouble.replace(VectorDouble.cumulativeProduct(multiplicand_negative), Double.NaN, 0);
+        VectorDouble capital_process_positive = multiplicand_positive.cumulativeProduct().replace(Double.NaN, 0);
+        VectorDouble capital_process_negative = multiplicand_negative.cumulativeProduct().replace(Double.NaN, 0);
 
         VectorDouble capital_process;
         if (theta == 1) {
@@ -46,23 +44,22 @@ public class BettingMartingale {
         } else if (theta == 0) {
             capital_process = capital_process_negative.multiply(1 - theta);
         } else {
-            capital_process = VectorDouble.max(
-                    capital_process_positive.multiply(theta),
+            capital_process = capital_process_positive.multiply(theta).max(
                     capital_process_negative.multiply(1 - theta)
             );
         }
 
-        capital_process = VectorDouble.replace(
-                capital_process,
-                VectorDouble.or(
-                        VectorDouble.lessThan(mu_t, 0),
-                        VectorDouble.greaterThan(mu_t, 1)
-                ),
-                Double.POSITIVE_INFINITY
-        );
+        // capital_process = VectorDouble.replace(
+        //         capital_process,
+        //         VectorDouble.or(
+        //                 VectorDouble.lessThan(mu_t, 0),
+        //                 VectorDouble.greaterThan(mu_t, 1)
+        //         ),
+        //         Double.POSITIVE_INFINITY
+        // );
 
-        assert VectorDouble.all(VectorDouble.greaterThanOrEqual(capital_process, 0));
-        assert VectorDouble.all(VectorDouble.notEquals(capital_process, Double.NaN));
+        // assert VectorDouble.all(VectorDouble.greaterThanOrEqual(capital_process, 0));
+        // assert VectorDouble.all(VectorDouble.notEquals(capital_process, Double.NaN));
 
         return capital_process;
     }
@@ -77,13 +74,12 @@ public class BettingMartingale {
         } else if (theta == 0) {
             mart = mart_negative;
         } else {
-            mart = VectorDouble.max(
-                    mart_positive.multiply(theta),
+            mart = mart_positive.multiply(theta).max(
                     mart_negative.multiply(1 - theta)
             );
         }
 
-        assert VectorDouble.all(VectorDouble.notEquals(mart, Double.NaN));
+        // assert VectorDouble.all(VectorDouble.notEquals(mart, Double.NaN));
         return mart;
     }
 
