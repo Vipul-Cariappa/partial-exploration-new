@@ -3,8 +3,8 @@ package de.tum.in.pet.util;
 import java.util.ArrayList;
 
 public class InPlaceBettingMartingale {
-    VectorDouble samples = new VectorDouble();
-    long samples_count;
+    public VectorDouble samples = new VectorDouble();
+    int samples_count;
     double alpha;
     double prior_mean;
     double prior_variance;
@@ -32,17 +32,22 @@ public class InPlaceBettingMartingale {
         this.aggregate_cache = new ArrayList<>();
     }
 
-    public void AddObservation(double sample) {
-        aggregate_cache.add(sample);
-        if (aggregate_cache.size() != aggregate)
-            return;
+    public int size() { return samples_count; }
 
-        double mean = 0;
-        for (double i: aggregate_cache) {
-            mean += i;
+    public void AddObservation(double sample) {
+        double mean = sample;
+        if (aggregate != 1) {
+            aggregate_cache.add(sample);
+            if (aggregate_cache.size() != aggregate)
+                return;
+
+            mean = 0;
+            for (double i: aggregate_cache) {
+                mean += i;
+            }
+            aggregate_cache.clear();
+            mean = mean / aggregate;
         }
-        aggregate_cache.clear();
-        mean = mean / aggregate;
 
         sample = mean;
 
@@ -113,10 +118,10 @@ public class InPlaceBettingMartingale {
         return new Pair<>(heuristic_search(low, high, iter_count, true, precision, delta), heuristic_search(low, high, iter_count, false, precision, delta));
     }
 
-    public Pair<Double, Double> confidence_width() { 
+    public double confidence_width() { 
         if (aggregate_cache.isEmpty() && samples.size() > 0) {
             confidence = confidence_width(confidence.first, confidence.second);
         }
-        return confidence;
+        return confidence.second - confidence.first;
     }
 }
