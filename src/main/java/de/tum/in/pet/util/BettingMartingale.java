@@ -1,5 +1,7 @@
 package de.tum.in.pet.util;
 
+import prism.Pair;
+
 public class BettingMartingale {
     VectorDouble samples;
     double cacheAlpha = -1.0;

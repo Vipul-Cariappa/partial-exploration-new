@@ -54,7 +54,21 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
   protected static final double initialNSamples = 1e4;
   protected static final double multiplicativeFactor = 5;
 
-  protected HashMap<Integer, HashMap<Integer, Pair<HashMap<Integer, InPlaceBettingMartingale>, Pair<Integer, Integer>>>> in_place_martingale = new HashMap<>();
+
+  protected HashMap<Integer, HashMap<Integer, MartingaleActionStats>> martingaleTransitionCount =
+          new HashMap<>();
+  protected HashMap<Integer, HashMap<Integer, BernsteinActionStats>> bernsteinTransitionCount =
+          new HashMap<>();
+
+  private static final class MartingaleActionStats {
+    private final HashMap<Integer, InPlaceBettingMartingale> transitions = new HashMap<>();
+    private final int seenState;
+    private int secondSeenState = -1;
+
+    private MartingaleActionStats(int seenState) {
+      this.seenState = seenState;
+    }
+  }
 
   public BlackOnDemandValueIterator(Explorer<S, M> explorer, UnboundedValues values, RewardGenerator<S> rewardGenerator,
                                     int revisitThreshold, double rMax, double pMin, double errorTolerance,
@@ -100,25 +114,25 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
           return new Pair<>(-1.0, -1.0);
         }
 
-        HashMap<Integer, Pair<HashMap<Integer, InPlaceBettingMartingale>, Pair<Integer, Integer>>> actionMartingale = in_place_martingale.get(state);
-        if (actionMartingale == null) {
+        HashMap<Integer, MartingaleActionStats> actions = martingaleTransitionCount.get(state);
+        if (actions == null) {
           return new Pair<>(0.0, 1.0);
         }
 
-        Pair<HashMap<Integer, InPlaceBettingMartingale>, Pair<Integer, Integer>> nextStateMartingale = actionMartingale.get(action);
-        if (nextStateMartingale == null) {
+        MartingaleActionStats actionStats = actions.get(action);
+        if (actionStats == null) {
           return new Pair<>(0.0, 1.0);
         }
 
-        int seenState = actionMartingale.get(action).second.first;
-        int secondSeenState = actionMartingale.get(action).second.second;
-        HashMap<Integer, InPlaceBettingMartingale> nextStateMartingaleMap = nextStateMartingale.first;
+        int seenState = actionStats.seenState;
+        int secondSeenState = actionStats.secondSeenState;
+        HashMap<Integer, InPlaceBettingMartingale> transitions = actionStats.transitions;
 
-        if (nextStateMartingaleMap.containsKey(nextState)) {
-          return nextStateMartingaleMap.get(nextState).getConfidenceWidth();
+        if (transitions.containsKey(nextState)) {
+          return transitions.get(nextState).getConfidenceWidth();
         }
         if (nextState == seenState || nextState == secondSeenState) {
-          Pair<Double, Double> confidence = nextStateMartingaleMap.get(seenState).getConfidenceWidth();
+          Pair<Double, Double> confidence = transitions.get(seenState).getConfidenceWidth();
           return new Pair<>(1 - confidence.second, 1 - confidence.first);
         }
         return new Pair<>(0.0, 1.0);
@@ -136,13 +150,15 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
   }
 
   public void updateMartingaleTransitions(int currentState, int actionIndex, int nextState) {
-    in_place_martingale.putIfAbsent(currentState, new HashMap<>());
-    HashMap<Integer, Pair<HashMap<Integer, InPlaceBettingMartingale>, Pair<Integer, Integer>>> actionMartingales = in_place_martingale.get(currentState);
+    martingaleTransitionCount.putIfAbsent(currentState, new HashMap<>());
+    HashMap<Integer, MartingaleActionStats> actionMartingales =
+            martingaleTransitionCount.get(currentState);
 
-    actionMartingales.putIfAbsent(actionIndex, new Pair<>(new HashMap<>(), new Pair<>(nextState, -1)));
-    HashMap<Integer, InPlaceBettingMartingale> nextStateMartingale = actionMartingales.get(actionIndex).first;
-    int seenState = actionMartingales.get(actionIndex).second.first;
-    int secondSeenState = actionMartingales.get(actionIndex).second.second;
+    actionMartingales.putIfAbsent(actionIndex, new MartingaleActionStats(nextState));
+    MartingaleActionStats actionStats = actionMartingales.get(actionIndex);
+    HashMap<Integer, InPlaceBettingMartingale> nextStateMartingale = actionStats.transitions;
+    int seenState = actionStats.seenState;
+    int secondSeenState = actionStats.secondSeenState;
 
     int num_next_states = nextStateMartingale.size();
     if (num_next_states == 1) {
@@ -151,18 +167,18 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
       } else if (secondSeenState == nextState) {
         nextStateMartingale.get(seenState).observe(0);
       } else if (secondSeenState == -1) {
-        actionMartingales.get(actionIndex).second.second = nextState;
+        actionStats.secondSeenState = nextState;
         nextStateMartingale.get(seenState).observe(0);
       } else {
         // insert two next items into nextStateMartingale, create old samples
         // second item
-        nextStateMartingale.put(secondSeenState, new InPlaceBettingMartingale(errorTolerance, aggregationCount));
+        nextStateMartingale.put(secondSeenState, new InPlaceBettingMartingale(transDelta, aggregationCount));
         InPlaceBettingMartingale second = nextStateMartingale.get(secondSeenState);
-        for (double i: second.samples.elements)
+        for (double i: nextStateMartingale.get(seenState).samples.elements)
           second.observe(1 - i); // ???: is this logic sound with aggregation
 
           // third item
-        nextStateMartingale.put(nextState, new InPlaceBettingMartingale(errorTolerance, aggregationCount));
+        nextStateMartingale.put(nextState, new InPlaceBettingMartingale(transDelta, aggregationCount));
         InPlaceBettingMartingale third = nextStateMartingale.get(nextState);
         for (int i = 0; i < nextStateMartingale.get(seenState).size(); i++)
           third.observe(0);
@@ -176,7 +192,7 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
     }
 
     if (!nextStateMartingale.containsKey(nextState)) {
-      nextStateMartingale.put(nextState, new InPlaceBettingMartingale(errorTolerance, aggregationCount));
+      nextStateMartingale.put(nextState, new InPlaceBettingMartingale(transDelta, aggregationCount));
       InPlaceBettingMartingale new_obs = nextStateMartingale.get(nextState);
       for (int i = 0; i < nextStateMartingale.get(seenState).size(); i++)
         new_obs.observe(0);
