@@ -129,7 +129,7 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
 //  }
 
   public void updateMartingaleTransitions(int currentState, int actionIndex, int nextState) {
-    int AGGREGATION = 1;
+    int AGGREGATION = -1; // -1 to dynamically decide
     in_place_martingale.putIfAbsent(currentState, new HashMap<>());
     HashMap<Integer, Pair<HashMap<Integer, InPlaceBettingMartingale>, Pair<Integer, Integer>>> actionMartingales = in_place_martingale.get(currentState);
 

@@ -17,6 +17,16 @@ public class InPlaceBettingMartingale {
     double samples_cumulative_sum;
     double samples_mean_diff_sq;
     VectorDouble lambda = new VectorDouble();
+    double base_aggregation_count = 15;
+
+    private int decide_aggregation_count() {
+        double current_mean = (confidence.second + confidence.first) / 2.0;
+        double mean = current_mean <= 0.5 ? current_mean : 1 - current_mean;
+        double aggregation_count = mean * 48 + 1; // using range [1, 25]
+        double confidence_width = confidence.second - confidence.first;
+        double aggregate_count_adjusted_to_confidence = (1 - confidence_width) * aggregation_count + confidence_width * base_aggregation_count;
+        return (int)Math.round(aggregate_count_adjusted_to_confidence);
+    }
 
     public InPlaceBettingMartingale(double alpha, double prior_mean, double prior_variance, double fake_obs, double scale, int aggregate) {
         this.alpha = alpha;
@@ -31,6 +41,20 @@ public class InPlaceBettingMartingale {
         this.confidence = new Pair<>(0.0, 1.0);
         this.aggregate_cache = new ArrayList<>();
     }
+    
+    public InPlaceBettingMartingale(double alpha, double prior_mean, double prior_variance, double fake_obs, double scale) {
+        this.alpha = alpha;
+        this.prior_mean = prior_mean;
+        this.prior_variance = prior_variance;
+        this.fake_obs = fake_obs;
+        this.scale = scale;
+        this.samples_count = 0;
+        this.samples_cumulative_sum = 0;
+        this.samples_mean_diff_sq = 0;
+        this.confidence = new Pair<>(0.0, 1.0);
+        this.aggregate_cache = new ArrayList<>();
+        this.aggregate = -1;
+    }
 
     public int size() { return samples_count; }
 
@@ -38,6 +62,9 @@ public class InPlaceBettingMartingale {
         double mean = sample;
         if (aggregate != 1) {
             aggregate_cache.add(sample);
+            double aggregate = this.aggregate;
+            if (aggregate == -1)
+                aggregate = decide_aggregation_count();
             if (aggregate_cache.size() != aggregate)
                 return;
 
