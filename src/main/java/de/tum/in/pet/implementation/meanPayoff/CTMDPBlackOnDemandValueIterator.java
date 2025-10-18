@@ -97,9 +97,9 @@ public class CTMDPBlackOnDemandValueIterator<S, M extends Model> extends OnDeman
         // returns the confidenceWidth for a state x and an action with index y. if y is greater than the number of choices
         // the explorer holds, it must be the stay action. We set confidence width of stay action equal to zero as we
         // know the probabilities of the action are accurate as they have been calculated and not learned.
-        Int2ObjectFunction<Int2DoubleFunction> confidenceWidthFunction = x -> (y -> y < explorer.getChoices(x).size()
-                ? Math.sqrt(-Math.log(transDelta) / (2 * explorer.getActionCounts(x, y)))
-                : 0);
+        Int2ObjectFunction<Int2ObjectFunction<Int2ObjectFunction<Pair<Double, Double>>>> confidenceWidthFunction = x -> (y -> z -> (y < explorer.getChoices(x).size()
+                ? new Pair<Double, Double>(Math.sqrt(-Math.log(transDelta) / (2 * explorer.getActionCounts(x, y))), 0.0)
+                : new Pair<Double, Double>(1.0, 1.0))); // XXX: this is completely invalid
 
         // Updates the confidence width function in UnboundedReachValues.
         values.setConfidenceWidthFunction(confidenceWidthFunction);
@@ -189,10 +189,10 @@ public class CTMDPBlackOnDemandValueIterator<S, M extends Model> extends OnDeman
         values.resetBounds();
         initSinkStates();
 
-        confidenceWidthFunction = x -> (y -> y < explorer.getChoices(x).size()
-                ? Math.sqrt(-Math.log(transDelta) / (2 * explorer.getActionCounts(x, y)))
-                : 0);
-        values.setConfidenceWidthFunction(confidenceWidthFunction);
+//        confidenceWidthFunction = x -> (y -> y < explorer.getChoices(x).size()
+//                ? Math.sqrt(-Math.log(transDelta) / (2 * explorer.getActionCounts(x, y)))
+//                : 0);
+//        values.setConfidenceWidthFunction(confidenceWidthFunction);
 
         // the update function is ran until there has been some progress, i.e., the upper bounds of some state have been changed.
         // if there has been change, this change needs to be propagated through the rest of the states.

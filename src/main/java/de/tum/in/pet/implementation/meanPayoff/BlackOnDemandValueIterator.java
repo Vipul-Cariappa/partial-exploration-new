@@ -80,26 +80,28 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
     //         ? Math.sqrt(-Math.log(transDelta)/(2*explorer_.getActionCounts(state, action)))
     //         : 0);
 
-    Int2ObjectFunction<Int2DoubleFunction> confidenceWidthFunction = state -> (action -> {
-      if (action >= explorer.getChoices(state).size()) {
-        return 0d;
-      }
+    Int2ObjectFunction<Int2ObjectFunction<Int2ObjectFunction<Pair<Double, Double>>>> confidenceWidthFunction = state -> (action -> next_state -> {
+      if (action >= explorer.getChoices(state).size())
+        return new Pair<Double,Double>(-1.0, -1.0);
+
       HashMap<Integer, Pair<HashMap<Integer, InPlaceBettingMartingale>, Pair<Integer, Integer>>> actionMartingale = in_place_martingale.get(state);
-      if (actionMartingale == null) { return 1d; }
+      if (actionMartingale == null)
+        return new Pair<Double,Double>(0.0, 1.0);
 
       Pair<HashMap<Integer, InPlaceBettingMartingale>, Pair<Integer, Integer>> nextStateMartingale = actionMartingale.get(action);
-      if (nextStateMartingale == null) { return 1d; }
+      if (nextStateMartingale == null)
+        return new Pair<Double,Double>(0.0, 1.0);
+      
+      int seenState = actionMartingale.get(action).second.first;
+      int secondSeenState = actionMartingale.get(action).second.second;
+      HashMap<Integer, InPlaceBettingMartingale> nexStateMartingaleMap = nextStateMartingale.first;
 
-      double max = Double.NEGATIVE_INFINITY;
-      for (var pair: nextStateMartingale.first.entrySet()) {
-        InPlaceBettingMartingale martingale = pair.getValue();
-        double value = martingale.confidence_width();
-        if (max < value) {
-          max = value;
-        }
-      }
+      if (nexStateMartingaleMap.containsKey(next_state))
+        return nexStateMartingaleMap.get(next_state).confidence_width();
+      if (next_state == seenState || next_state == secondSeenState)
+        return nexStateMartingaleMap.get(seenState).confidence_width();
+      return new Pair<Double,Double>(0.0, 1.0);
 //      logger.log(Level.INFO, max + " - " + oldConfidenceWidthFunction.get(state).get(action));
-      return max;
     });
 
     // Updates the confidence width function in UnboundedReachValues.
@@ -129,7 +131,7 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
 //  }
 
   public void updateMartingaleTransitions(int currentState, int actionIndex, int nextState) {
-    int AGGREGATION = -1; // -1 to dynamically decide
+    int AGGREGATION = 1; // -1 to dynamically decide
     in_place_martingale.putIfAbsent(currentState, new HashMap<>());
     HashMap<Integer, Pair<HashMap<Integer, InPlaceBettingMartingale>, Pair<Integer, Integer>>> actionMartingales = in_place_martingale.get(currentState);
 

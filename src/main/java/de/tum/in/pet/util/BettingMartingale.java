@@ -1,5 +1,7 @@
 package de.tum.in.pet.util;
 
+import prism.Pair;
+
 public class BettingMartingale {
     static VectorDouble betting_mart(VectorDouble x, VectorDouble lambda_positive, double m, double alpha, double theta, double trunc_scale) {
         // alpha = 0.05;

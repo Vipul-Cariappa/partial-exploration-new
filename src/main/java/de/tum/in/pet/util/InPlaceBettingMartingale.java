@@ -1,6 +1,7 @@
 package de.tum.in.pet.util;
 
 import java.util.ArrayList;
+import prism.Pair;
 
 public class InPlaceBettingMartingale {
     public VectorDouble samples = new VectorDouble();
@@ -145,10 +146,10 @@ public class InPlaceBettingMartingale {
         return new Pair<>(heuristic_search(low, high, iter_count, true, precision, delta), heuristic_search(low, high, iter_count, false, precision, delta));
     }
 
-    public double confidence_width() { 
+    public Pair<Double, Double> confidence_width() { 
         if (aggregate_cache.isEmpty() && samples.size() > 0) {
             confidence = confidence_width(confidence.first, confidence.second);
         }
-        return confidence.second - confidence.first;
+        return confidence;
     }
 }
