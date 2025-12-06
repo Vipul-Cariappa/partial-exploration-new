@@ -20,7 +20,7 @@ public class BlackUnboundedReachValues extends UnboundedReachValues{
   private final UpdateMethod updateMethod;
 
   // Returns the confidence width for a state x and it's corresponding action index y
-  private Int2ObjectFunction<Int2DoubleFunction> confidenceWidthFunction = x -> (y -> (0));
+  private Int2ObjectFunction<Int2ObjectFunction<Int2ObjectFunction<Pair<Double, Double>>>> confidenceWidthFunction = x -> (y -> (z -> { return new Pair<>(0.0, 1.0); }));
 
   private Int2ObjectMap<Bounds> oldBounds;
 
@@ -33,12 +33,12 @@ public class BlackUnboundedReachValues extends UnboundedReachValues{
   /**
    * Setter for confidenceWidthFunction.
    */
-  public void setConfidenceWidthFunction(Int2ObjectFunction<Int2DoubleFunction> confidenceWidthFunction){
+  public void setConfidenceWidthFunction(Int2ObjectFunction<Int2ObjectFunction<Int2ObjectFunction<Pair<Double, Double>>>> confidenceWidthFunction){
     this.confidenceWidthFunction = confidenceWidthFunction;
   }
 
   public void resetConfidenceWidthFunction(){
-    this.confidenceWidthFunction = x -> (y -> (0));
+    this.confidenceWidthFunction = x -> (y -> (z -> { return new Pair<>(0.0, 1.0); }));
   }
 
   /**
@@ -75,7 +75,7 @@ public class BlackUnboundedReachValues extends UnboundedReachValues{
     ToDoubleFunction<Integer> actionScore = i -> choices.get(i).isEmpty()
             ? 1 : isSmallestFixPoint()
                   ? 1.0d - choices.get(i).sumWeighted(this::lowerBound)
-                  : successorBounds(state, choices.get(i), confidenceWidthFunction.apply(state).applyAsDouble(i)).upperBound();
+                  : successorBounds(state, choices.get(i), confidenceWidthFunction.apply(state).apply(i)).upperBound();
 
     return SampleUtil.getOptimalChoice(choices, actionScore);
   }
@@ -88,7 +88,7 @@ public class BlackUnboundedReachValues extends UnboundedReachValues{
    * @param confidenceWidth: The confidence width for a state-action pair.
    * @return Bounds of an action from a state with some confidence width.
    */
-  private Bounds successorBounds(int state, Distribution distribution, double confidenceWidth) {
+  private Bounds successorBounds(int state, Distribution distribution, Int2ObjectFunction<Pair<Double, Double>> confidenceWidth) {
     if (distribution.support().size()==0){
       return Bounds.reachUnknown();
     }
@@ -100,7 +100,12 @@ public class BlackUnboundedReachValues extends UnboundedReachValues{
     for (Int2DoubleMap.Entry entry : distribution) {
       int successor = entry.getIntKey();
       Bounds successorBounds = bounds(successor);
-      double probability = Math.max(0, entry.getDoubleValue()-confidenceWidth);
+      Pair<Double, Double> CW = confidenceWidth.apply(successor);
+      double probability;
+      if (CW.second == -1)
+        probability = Math.max(0, entry.getDoubleValue());
+      else
+        probability = Math.max(0, CW.first);
       sum += probability;
       lower += successorBounds.lowerBound() * probability;
       upper += successorBounds.upperBound() * probability;

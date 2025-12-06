@@ -51,6 +51,10 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
   protected static final double initialNSamples = 1e4;
   protected static final double multiplicativeFactor = 5;
 
+  protected HashMap<Integer, HashMap<Integer, HashMap<Integer, Integer>>> transition_count = new HashMap<>();
+  private int K = 0;
+  protected double epsilon = 0.2; // TODO: make an cmd arg
+
   public BlackOnDemandValueIterator(Explorer<S, M> explorer, UnboundedValues values, RewardGenerator<S> rewardGenerator,
                                     int revisitThreshold, double rMax, double pMin, double errorTolerance,
                                     Double2LongFunction nSampleFunction, double precision, long timeout,
@@ -64,6 +68,35 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
     this.simulateMec = simulateMec;
     this.deltaTCalculationMethod = deltaTCalculationMethod;
     this.maxSuccessorsInModel = maxSuccessorsInModel;
+    
+    // BlackExplorer<S, M> black_explorer = (BlackExplorer<S, M>) explorer;
+    BlackUnboundedReachValues black_values = (BlackUnboundedReachValues) values;
+    Int2ObjectFunction<Int2ObjectFunction<Int2ObjectFunction<Pair<Double, Double>>>> confidenceWidthFunction = state -> (action -> (next_state -> { 
+      if (action >= explorer.getChoices(state).size())
+        return new Pair<Double,Double>(-1.0, -1.0);
+      
+      HashMap<Integer, HashMap<Integer, Integer>> actions = transition_count.get(state);
+      if (actions == null)
+        return new Pair<>(0.0, 1.0);
+      
+      HashMap<Integer, Integer> next_states = actions.get(action);
+      if (next_states == null)
+        return new Pair<>(0.0, 1.0);
+
+      if (!next_states.containsKey(next_state))
+        return new Pair<>(0.0, 1.0);
+
+      int triplet_count = next_states.get(next_state);
+      int state_action_count = 0;
+      for (Map.Entry<Integer, Integer> next_state_it: next_states.entrySet()) // FIXME: optimization: remove this iteration
+        state_action_count += next_state_it.getValue();
+      double N = Math.ceil((-2 / (epsilon * epsilon)) * Math.log(errorTolerance / (2 * K)));
+      assert N > 0;
+      double low = ((double) triplet_count / state_action_count) - (epsilon / 2) * (1 + ((double) N / state_action_count));
+      double high = ((double) triplet_count / state_action_count) + (epsilon / 2) * (1 + ((double) N / state_action_count));
+      return new Pair<>(Math.max(0, low), Math.min(1, high));
+    }));
+    black_values.setConfidenceWidthFunction(confidenceWidthFunction);
   }
 
   @Override
@@ -83,17 +116,6 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
     double k = Math.pow(2, run);
     long nIterations = nSampleFunction.apply(k);
     double errorTolerance = this.errorTolerance;
-
-    // Updates the confidenceWidthFunction according to the latest counts and transDelta value. The confidenceWidthFunction
-    // returns the confidenceWidth for a state x and an action with index y. if y is greater than the number of choices
-    // the explorer holds, it must be the stay action. We set confidence width of stay action equal to zero as we
-    // know the probabilities of the action are accurate as they have been calculated and not learned.
-    Int2ObjectFunction<Int2DoubleFunction> confidenceWidthFunction = x -> (y -> y < explorer.getChoices(x).size()
-            ? Math.sqrt(-Math.log(transDelta)/(2*explorer.getActionCounts(x, y)))
-            : 0);
-
-    // Updates the confidence width function in UnboundedReachValues.
-    values.setConfidenceWidthFunction(confidenceWidthFunction);
 
     for (int i = 0; i < nIterations; i++) {
       IntList visitStack = new IntArrayList();
@@ -164,7 +186,8 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
           // Hence, we know that there might be new MECs in the model and it could be worthwhile finding them again.
           seenNewTransitionSignificantly |= explorer.updateCounts(currentState, nextActionIndex, nextState);
 
-          totalTransitionsSimulated++;
+          // update distribution
+          updateTransitionDistribution(currentState, nextActionIndex, nextState);
         }
         totalTransitionsSimulated++;
 
@@ -187,11 +210,6 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
     values.resetBounds();
     initSinkStates();
 
-    confidenceWidthFunction = x -> (y -> y < explorer.getChoices(x).size()
-            ? Math.sqrt(-Math.log(transDelta)/(2*explorer.getActionCounts(x, y)))
-            : 0);
-    values.setConfidenceWidthFunction(confidenceWidthFunction);
-
     // the update function is ran until there has been some progress, i.e., the upper bounds of some state have been changed.
     // if there has been change, this change needs to be propagated through the rest of the states.
     boolean ifProgress = true;
@@ -206,6 +224,21 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
 
   }
 
+  public void updateTransitionDistribution(int currentState, int actionIndex, int nextState) {
+    transition_count.putIfAbsent(currentState, new HashMap<>());
+    HashMap<Integer, HashMap<Integer, Integer>> actions = transition_count.get(currentState);
+    actions.putIfAbsent(actionIndex, new HashMap<>());
+    HashMap<Integer, Integer> next_states = actions.get(actionIndex);
+    if (next_states.containsKey(nextState))
+      next_states.replace(nextState, next_states.get(nextState) + 1);
+    else {
+      next_states.put(nextState, 1);
+      K++;
+    }
+  }
+
+  private long n = 1;
+  // private double series = 0;
   private void computeDeltaT(BlackExplorer<S, M> explorer, double errorTolerance) {
     switch (deltaTCalculationMethod) {
       case P_MIN:
@@ -340,7 +373,6 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
 
     RestrictedMecBoundedValueIterator<S> valueIterator = new RestrictedMecBoundedValueIterator<>(mec, targetPrecision/2,
             rewardGenerator, stateIndexMap, rMax, timeout);
-    valueIterator.setConfidenceWidthFunction(x -> (y -> Math.sqrt(-Math.log(transDelta)/(2*explorer.getActionCounts(x, y)))));
     valueIterator.setDistributionFunction(x -> y -> this.explorer.model().getChoice(x, y));
     valueIterator.setLabelFunction(x -> y -> this.explorer.model().getActions(x).get(y).label());
 
