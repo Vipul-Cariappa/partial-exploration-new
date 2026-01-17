@@ -5,6 +5,7 @@ import prism.Pair;
 
 public class InPlaceBettingMartingale {
     public VectorDouble samples = new VectorDouble();
+    long last_computed_at = 0;
     int samples_count;
     double alpha;
     double prior_mean;
@@ -75,7 +76,7 @@ public class InPlaceBettingMartingale {
                 aggregate = decide_aggregation_count();
             else if (aggregate == -2)
                 aggregate = decide_aggregation_count2();
-            if (aggregate_cache.size() != aggregate)
+            if (aggregate_cache.size() < aggregate)
                 return;
 
             mean = 0;
@@ -105,7 +106,7 @@ public class InPlaceBettingMartingale {
         lambda.append(lambda_i);
     }
 
-    public Pair<Double, Double> confidence_width(int breaks, double break_start, double break_stop, boolean running_intersection, double theta, double trunc_scale) {
+    private Pair<Double, Double> confidence_width(int breaks, double break_start, double break_stop, boolean running_intersection, double theta, double trunc_scale) {
         Pair<VectorDouble, VectorDouble> r = BettingMartingale.confidence_sequence_from_martingale(samples, lambda, breaks, break_start, break_stop, alpha, running_intersection, theta, trunc_scale);
         VectorDouble l = r.first;
         VectorDouble u = r.second;
@@ -148,7 +149,7 @@ public class InPlaceBettingMartingale {
         return high;
     }
 
-    public Pair<Double, Double> confidence_width(double low, double high) {
+    private Pair<Double, Double> confidence_width(double low, double high) {
         int iter_count = 10; // precision: 2 ^ (-iter_count)
         double precision = 1e-8;
         double delta = 1e-6;
@@ -156,7 +157,8 @@ public class InPlaceBettingMartingale {
     }
 
     public Pair<Double, Double> confidence_width() { 
-        if (aggregate_cache.isEmpty() && samples.size() > 0) {
+        if (samples.size() > last_computed_at) {
+            last_computed_at = samples.size();
             confidence = confidence_width(confidence.first, confidence.second);
         }
         return confidence;

@@ -68,7 +68,7 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
     this.deltaTCalculationMethod = deltaTCalculationMethod;
     this.maxSuccessorsInModel = maxSuccessorsInModel;
 
-    BlackUnboundedReachValues values_ = (BlackUnboundedReachValues) this.values;
+    BlackUnboundedReachValues blackValues = (BlackUnboundedReachValues) this.values;
     
     // Updates the confidenceWidthFunction according to the latest counts and transDelta value. The confidenceWidthFunction
     // returns the confidenceWidth for a state x and an action with index y. if y is greater than the number of choices
@@ -105,7 +105,7 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
     });
 
     // Updates the confidence width function in UnboundedReachValues.
-    values_.setConfidenceWidthFunction(confidenceWidthFunction);
+    blackValues.setConfidenceWidthFunction(confidenceWidthFunction);
   }
 
   @Override
@@ -192,15 +192,12 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
   @Override
   protected boolean sample(int initialState, int run) throws PrismException {
 
-    BlackUnboundedReachValues values = (BlackUnboundedReachValues) this.values;
-
     BlackExplorer<S, M> explorer = (BlackExplorer<S, M>) explorer();
 
     explorer.updateCountParams(transDelta, pMin);
 
     double k = Math.pow(2, run);
     long nIterations = nSampleFunction.apply(k);
-    double errorTolerance = this.errorTolerance;
 
     for (int i = 0; i < nIterations; i++) {
       IntList visitStack = new IntArrayList();
@@ -284,15 +281,11 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
         currentState = nextState;
 
         computeDeltaT(explorer, errorTolerance);
-
       }
-
-
     }
 
     handleComponents();
 
-    values.resetBounds();
     initSinkStates();
 
     // the update function is ran until there has been some progress, i.e., the upper bounds of some state have been changed.
