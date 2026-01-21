@@ -52,9 +52,14 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
   protected static final double initialNSamples = 1e4;
   protected static final double multiplicativeFactor = 5;
 
-  protected HashMap<Integer, HashMap<Integer, HashMap<Integer, Integer>>> transition_count = new HashMap<>();
-  private int K = 0;
-  protected double epsilon = 0.2; // TODO: make an cmd arg
+  // s -> a -> (s' -> (#(s, a, s'), (V, #(s, a))), Z)
+  // #(s, a) represents the last count of #_{t - 1}(s, a)
+  // we only update V and Z if the #(s, a) > #_{t - 1}(s, a)
+  // this is a type of cache
+  // but is necessary because V is dependent on Z_{t - 1}
+  // and Z_{t - 1} is dependent of #(s, a)
+  // TODO: make the below its own managed class, otherwise reading code is too difficult
+  protected HashMap<Integer, HashMap<Integer, Pair<HashMap<Integer, Pair<Long, Pair<Double, Long>>>, Double>>> transition_count = new HashMap<>();
 
   public BlackOnDemandValueIterator(Explorer<S, M> explorer, UnboundedValues values, RewardGenerator<S> rewardGenerator,
                                     int revisitThreshold, double rMax, double pMin, double errorTolerance,
@@ -79,26 +84,36 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
       if (action >= explorer.getChoices(state).size())
         return new Pair<Double,Double>(-1.0, -1.0);
       
-      HashMap<Integer, HashMap<Integer, Integer>> actions = transition_count.get(state);
+      HashMap<Integer, Pair<HashMap<Integer, Pair<Long, Pair<Double, Long>>>, Double>> actions = transition_count.get(state);
       if (actions == null)
         return new Pair<>(0.0, 1.0);
       
-      HashMap<Integer, Integer> next_states = actions.get(action);
+      Pair<HashMap<Integer, Pair<Long, Pair<Double, Long>>>, Double> next_states = actions.get(action);
       if (next_states == null)
         return new Pair<>(0.0, 1.0);
 
-      if (!next_states.containsKey(next_state))
+      if (!next_states.first.containsKey(next_state))
         return new Pair<>(0.0, 1.0);
 
-      int triplet_count = next_states.get(next_state);
+      Pair<Long, Pair<Double, Long>> transition_info = next_states.first.get(next_state);
+      long triplet_count = transition_info.first;
       int state_action_count = 0;
-      for (Map.Entry<Integer, Integer> next_state_it: next_states.entrySet()) // FIXME: optimization: remove this iteration
-        state_action_count += next_state_it.getValue();
-      double N = Math.ceil((-2 / (epsilon * epsilon)) * Math.log(errorTolerance / (2 * K)));
-      assert N > 0;
-      double low = ((double) triplet_count / state_action_count) - (epsilon / 2) * (1 + ((double) N / state_action_count));
-      double high = ((double) triplet_count / state_action_count) + (epsilon / 2) * (1 + ((double) N / state_action_count));
-      return new Pair<>(Math.max(0, low), Math.min(1, high));
+      for (Map.Entry<Integer, Pair<Long, Pair<Double, Long>>> next_state_it: next_states.first.entrySet()) {
+        // FIXME: optimization: remove this iteration
+        state_action_count += next_state_it.getValue().first;
+      }
+      double z = next_states.second;
+      double v = transition_info.second.first;
+      double Z = (double) triplet_count / (double) state_action_count;
+      if (state_action_count > transition_info.second.second) {
+        v += (1 - z) * (1 - z);
+        transition_info.second.first = v;
+        next_states.second = Z;
+      }
+      double sigma = errorTolerance / numberOfTransitions;
+      double L = Math.log(Math.log(2.0 * (v + 1.0)));
+      double diff = (1.7 * Math.sqrt(Math.max(v, 1.0) * L + (1.0 / 1.4) * Math.log(0.05 / sigma) + 3.82) + 2.42 * Math.log(0.05 / sigma) + 3.4 * L + 13.0) / (double) state_action_count;
+      return new Pair<>(Math.max(0.0, Z - diff), Math.min(1.0, Z + diff));
     }));
     black_values.setConfidenceWidthFunction(confidenceWidthFunction);
   }
@@ -230,19 +245,15 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
 
   public void updateTransitionDistribution(int currentState, int actionIndex, int nextState) {
     transition_count.putIfAbsent(currentState, new HashMap<>());
-    HashMap<Integer, HashMap<Integer, Integer>> actions = transition_count.get(currentState);
-    actions.putIfAbsent(actionIndex, new HashMap<>());
-    HashMap<Integer, Integer> next_states = actions.get(actionIndex);
-    if (next_states.containsKey(nextState))
-      next_states.replace(nextState, next_states.get(nextState) + 1);
-    else {
-      next_states.put(nextState, 1);
-      K++;
-    }
+    HashMap<Integer, Pair<HashMap<Integer, Pair<Long, Pair<Double, Long>>>, Double>> actions = transition_count.get(currentState);
+    actions.putIfAbsent(actionIndex, new Pair<>(new HashMap<>(), 0.0));
+    Pair<HashMap<Integer, Pair<Long, Pair<Double, Long>>>, Double> next_states = actions.get(actionIndex);
+    if (next_states.first.containsKey(nextState))
+      next_states.first.get(nextState).first++;
+    else
+      next_states.first.put(nextState, new Pair<>(1L, new Pair<>(0.0, 0L)));
   }
 
-  private long n = 1;
-  // private double series = 0;
   private void computeDeltaT(BlackExplorer<S, M> explorer, double errorTolerance) {
     switch (deltaTCalculationMethod) {
       case P_MIN:
