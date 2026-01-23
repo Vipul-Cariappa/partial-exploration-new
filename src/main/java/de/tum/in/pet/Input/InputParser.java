@@ -18,6 +18,7 @@ public class InputParser {
         Options options = InputOptions.getAllInputOptions();
         CommandLine commandLine = CliHelper.parse(options, args);
 
+        long numberOfTransitions = parseLongOption(commandLine, InputOptions.numberOfTransitions, DefaultInputValues.numberOfTransitions);
         double precision = parseDoubleOption(commandLine, InputOptions.precisionOption, DefaultInputValues.PRECISION);
         int revisitThreshold = parseIntOption(commandLine, InputOptions.revisitThresholdOption, DefaultInputValues.THRESHOLD);
         double maxReward = parseDoubleOption(commandLine, InputOptions.maxRewardOption, DefaultInputValues.REWARD_UPPERBOUND);
@@ -66,7 +67,8 @@ public class InputParser {
                 simulateMec,
                 outputPath,
                 maxSuccessorsInModel,
-                deltaTMethod);
+                deltaTMethod,
+                numberOfTransitions);
     }
 
     private static long parseLongOption(CommandLine commandLine, Option option, long defaultValue) {
