@@ -3,6 +3,39 @@ package de.tum.in.pet.util;
 import prism.Pair;
 
 public class BettingMartingale {
+    VectorDouble samples;
+    double cacheAlpha = -1.0;
+    double cacheGridWidth = -1.0;
+    int cacheSize = 0;
+    Pair<Double, Double> confidenceWidth = new Pair<Double,Double>(-1.0, -1.0);
+    
+    BettingMartingale() {
+        samples = new VectorDouble();
+    }
+    
+    public void observe(double x) {
+        samples.append(x);  // TODO: add aggregation
+    }
+
+    public Pair<Double, Double> confidenceWidth(double alpha, double gridWidth) {
+        if (cacheSize == samples.size() && cacheAlpha == alpha && cacheGridWidth == gridWidth)
+            return confidenceWidth;
+        cacheSize = samples.size();
+        cacheAlpha = alpha;
+        cacheGridWidth = gridWidth;
+        confidenceWidth = BettingMartingale.confidence_width(
+            samples, 
+            (int)(1.0/gridWidth), 
+            0.0, 
+            1.0, 
+            alpha,
+            true, 
+            0.5, 
+            0.5
+        );
+        return confidenceWidth;
+    }
+
     static VectorDouble betting_mart(VectorDouble x, VectorDouble lambda_positive, double m, double alpha, double theta, double trunc_scale) {
         // alpha = 0.05;
         // theta = 0.5;
