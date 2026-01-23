@@ -30,6 +30,7 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
 
   protected final double pMin; // as mentioned in CAV'19. It should be set to the lowest transition probability of the input model.
   protected final double errorTolerance; // as mentioned in CAV'19. Error tolerance for the learned distributions of the learned model.
+  protected final long numberOfTransitions;
   protected final Double2LongFunction nSampleFunction; // returns N_k for each k as in CAV'19. Returns the number of times paths should be sampled for each value of k.
 
   protected List<NatBitSet> mecs = new ArrayList<>(); // Holds a list of mecs in the model.
@@ -57,7 +58,7 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
 
   public BlackOnDemandValueIterator(Explorer<S, M> explorer, UnboundedValues values, RewardGenerator<S> rewardGenerator,
                                     int revisitThreshold, double rMax, double pMin, double errorTolerance,
-                                    Double2LongFunction nSampleFunction, double precision, long timeout,
+                                    Double2LongFunction nSampleFunction, double precision, long numberOfTransitions, long timeout,
                                     boolean getErrorProbability, SimulateMec simulateMec,
                                     DeltaTCalculationMethod deltaTCalculationMethod, int maxSuccessorsInModel) {
     super(explorer, values, rewardGenerator, revisitThreshold, rMax, precision, timeout);
@@ -68,6 +69,9 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
     this.simulateMec = simulateMec;
     this.deltaTCalculationMethod = deltaTCalculationMethod;
     this.maxSuccessorsInModel = maxSuccessorsInModel;
+    this.numberOfTransitions = numberOfTransitions;
+
+    // System.out.println("Using alpha = " + (errorTolerance / numberOfTransitions) + " for Martingales");
     
     // BlackExplorer<S, M> black_explorer = (BlackExplorer<S, M>) explorer;
     BlackUnboundedReachValues black_values = (BlackUnboundedReachValues) values;

@@ -130,7 +130,8 @@ public final class MeanPayoffChecker {
 
       valueIterator = new BlackOnDemandValueIterator<>(explorer, values, rewardGenerator,
               ip.revisitThreshold, ip.maxReward, ip.pMin, ip.errorTolerance, nSampleFunction,
-              ip.precision / ip.maxReward, System.currentTimeMillis() + ip.timeout, ip.getErrorProbability,
+              ip.precision / ip.maxReward, ip.numberOfTransitions,
+              System.currentTimeMillis() + ip.timeout, ip.getErrorProbability,
               ip.simulateMec, ip.deltaTCalculationMethod, ip.maxSuccessorsInModel);
     }
     else{
@@ -141,7 +142,7 @@ public final class MeanPayoffChecker {
 
       valueIterator = new GreyOnDemandValueIterator<>(explorer, values, rewardGenerator,
               ip.revisitThreshold, ip.maxReward, ip.pMin, ip.errorTolerance, nSampleFunction,
-              ip.precision / ip.maxReward, System.currentTimeMillis()+ip.timeout,
+              ip.precision / ip.maxReward, ip.numberOfTransitions, System.currentTimeMillis()+ip.timeout,
               ip.simulateMec, ip.deltaTCalculationMethod, ip.maxSuccessorsInModel);
     }
 
