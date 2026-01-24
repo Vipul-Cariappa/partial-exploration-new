@@ -32,6 +32,8 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
   protected final double pMin; // as mentioned in CAV'19. It should be set to the lowest transition probability of the input model.
   protected final double errorTolerance; // as mentioned in CAV'19. Error tolerance for the learned distributions of the learned model.
   protected final long numberOfTransitions;
+  private long K = 0; // running count of number of transitions
+  private long k = 10; // running overestimate of number of transitions
   protected final Double2LongFunction nSampleFunction; // returns N_k for each k as in CAV'19. Returns the number of times paths should be sampled for each value of k.
 
   protected List<NatBitSet> mecs = new ArrayList<>(); // Holds a list of mecs in the model.
@@ -147,47 +149,47 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
     int num_next_states = nextStateMartingale.size();
     if (num_next_states == 1) {
       if (seenState == nextState) {
-        nextStateMartingale.get(seenState).AddObservation(1);
+        nextStateMartingale.get(seenState).observe(1);
       } else if (secondSeenState == nextState) {
-        nextStateMartingale.get(seenState).AddObservation(0);
+        nextStateMartingale.get(seenState).observe(0);
       } else if (secondSeenState == -1) {
         actionMartingales.get(actionIndex).second.second = nextState;
-        nextStateMartingale.get(seenState).AddObservation(0);
+        nextStateMartingale.get(seenState).observe(0);
       } else {
         // insert two next items into nextStateMartingale, create old samples
         // second item
-        nextStateMartingale.put(secondSeenState, new InPlaceBettingMartingale(0.05, 0.5, 0.25, 1, 1, AGGREGATION));
+        nextStateMartingale.put(secondSeenState, new InPlaceBettingMartingale(0.05, AGGREGATION));
         InPlaceBettingMartingale second = nextStateMartingale.get(secondSeenState);
         for (double i: second.samples.elements)
-          second.AddObservation(1 - i); // ???: is this logic sound with aggregation
+          second.observe(1 - i); // ???: is this logic sound with aggregation
         
           // third item
-        nextStateMartingale.put(nextState, new InPlaceBettingMartingale(0.05, 0.5, 0.25, 1, 1, AGGREGATION));
+        nextStateMartingale.put(nextState, new InPlaceBettingMartingale(0.05, AGGREGATION));
         InPlaceBettingMartingale third = nextStateMartingale.get(nextState);
         for (int i = 0; i < nextStateMartingale.get(seenState).size(); i++)
-          third.AddObservation(0);
+          third.observe(0);
         
         // insert this sample
-        nextStateMartingale.get(seenState).AddObservation(0);
-        second.AddObservation(0);
-        third.AddObservation(1);
+        nextStateMartingale.get(seenState).observe(0);
+        second.observe(0);
+        third.observe(1);
       }
       return;
     }
     
     if (!nextStateMartingale.containsKey(nextState)) {
-      nextStateMartingale.put(nextState, new InPlaceBettingMartingale(0.05, 0.5, 0.25, 1, 1, AGGREGATION));
+      nextStateMartingale.put(nextState, new InPlaceBettingMartingale(0.05, AGGREGATION));
       InPlaceBettingMartingale new_obs = nextStateMartingale.get(nextState);
       for (int i = 0; i < nextStateMartingale.get(seenState).size(); i++)
-        new_obs.AddObservation(0);
+        new_obs.observe(0);
     }
     
     nextStateMartingale.forEach(
       (state, mart) -> { 
         if (state == nextState) { 
-          mart.AddObservation(1);
+          mart.observe(1);
         } else { 
-          mart.AddObservation(0); 
+          mart.observe(0); 
         }
       }
     );

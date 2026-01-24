@@ -8,6 +8,11 @@ public class VectorDouble {
     public int capacity = 0;
 
     // Constructor
+    public VectorDouble(int size) {
+        elements = new double[size];
+        this.capacity = size;
+    }
+
     public VectorDouble(double... elements) {
         this.elements = elements;
         size = this.elements.length;
