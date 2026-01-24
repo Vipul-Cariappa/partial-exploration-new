@@ -138,7 +138,7 @@ public class InPlaceBettingMartingale {
         // add observation and compute confidence_with at the same time
         for (int i = 0; i < samples.size(); i++) {
             observe(samples.at(i));
-            confidence_width();
+            getConfidenceWidth();
         }
     }
 
@@ -192,10 +192,12 @@ public class InPlaceBettingMartingale {
         return new Pair<>(heuristic_search(low, high, iter_count, true, precision, delta), heuristic_search(low, high, iter_count, false, precision, delta));
     }
 
-    public Pair<Double, Double> confidence_width() { 
+    public Pair<Double, Double> getConfidenceWidth() {
         if (samples.size() > last_computed_at) {
             last_computed_at = samples.size();
             confidence = confidence_width(confidence.first, confidence.second);
+            // if ((confidence.first < 0.0) || (confidence.first > 1.0))
+            //     System.out.println("Illegal value of lower bound of confidence width");
         }
         return confidence;
     }

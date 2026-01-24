@@ -55,7 +55,7 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
   protected static final double initialNSamples = 1e4;
   protected static final double multiplicativeFactor = 5;
 
-  protected HashMap<Integer, HashMap<Integer, Pair<HashMap<Integer, InPlaceBettingMartingale>, Pair<Integer, Integer>>>> in_place_martingale = new HashMap<>();
+  protected HashMap<Integer, HashMap<Integer, Pair<HashMap<Integer, InPlaceBettingMartingale>, Pair<Integer, Integer>>>> martingaleMap = new HashMap<>();
 
   public BlackOnDemandValueIterator(Explorer<S, M> explorer, UnboundedValues values, RewardGenerator<S> rewardGenerator,
                                     int revisitThreshold, double rMax, double pMin, double errorTolerance,
@@ -90,7 +90,7 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
       if (action >= explorer.getChoices(state).size())
         return new Pair<Double,Double>(-1.0, -1.0);
 
-      HashMap<Integer, Pair<HashMap<Integer, InPlaceBettingMartingale>, Pair<Integer, Integer>>> actionMartingale = in_place_martingale.get(state);
+      HashMap<Integer, Pair<HashMap<Integer, InPlaceBettingMartingale>, Pair<Integer, Integer>>> actionMartingale = martingaleMap.get(state);
       if (actionMartingale == null)
         return new Pair<Double,Double>(0.0, 1.0);
 
@@ -103,9 +103,9 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
       HashMap<Integer, InPlaceBettingMartingale> nexStateMartingaleMap = nextStateMartingale.first;
 
       if (nexStateMartingaleMap.containsKey(next_state))
-        return nexStateMartingaleMap.get(next_state).confidence_width();
+        return nexStateMartingaleMap.get(next_state).getConfidenceWidth();
       if (next_state == seenState || next_state == secondSeenState)
-        return nexStateMartingaleMap.get(seenState).confidence_width();
+        return nexStateMartingaleMap.get(seenState).getConfidenceWidth();
       return new Pair<Double,Double>(0.0, 1.0);
 //      logger.log(Level.INFO, max + " - " + oldConfidenceWidthFunction.get(state).get(action));
     });
@@ -138,8 +138,8 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
 
   public void updateMartingaleTransitions(int currentState, int actionIndex, int nextState) {
     int AGGREGATION = 1; // -1 to dynamically decide, -2 to aggregate more if we are confident
-    in_place_martingale.putIfAbsent(currentState, new HashMap<>());
-    HashMap<Integer, Pair<HashMap<Integer, InPlaceBettingMartingale>, Pair<Integer, Integer>>> actionMartingales = in_place_martingale.get(currentState);
+    martingaleMap.putIfAbsent(currentState, new HashMap<>());
+    HashMap<Integer, Pair<HashMap<Integer, InPlaceBettingMartingale>, Pair<Integer, Integer>>> actionMartingales = martingaleMap.get(currentState);
 
     actionMartingales.putIfAbsent(actionIndex, new Pair<>(new HashMap<>(), new Pair<>(nextState, -1)));
     HashMap<Integer, InPlaceBettingMartingale> nextStateMartingale = actionMartingales.get(actionIndex).first;
@@ -153,18 +153,20 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
       } else if (secondSeenState == nextState) {
         nextStateMartingale.get(seenState).observe(0);
       } else if (secondSeenState == -1) {
+        incRunningTransitionCount(); // seeing this (s, a, s') for the first time
         actionMartingales.get(actionIndex).second.second = nextState;
         nextStateMartingale.get(seenState).observe(0);
       } else {
+        incRunningTransitionCount(); // seeing this (s, a, s') for the first time
         // insert two next items into nextStateMartingale, create old samples
         // second item
-        nextStateMartingale.put(secondSeenState, new InPlaceBettingMartingale(0.05, AGGREGATION));
+        nextStateMartingale.put(secondSeenState, new InPlaceBettingMartingale(errorTolerance / (double) k, AGGREGATION));
         InPlaceBettingMartingale second = nextStateMartingale.get(secondSeenState);
         for (double i: second.samples.elements)
           second.observe(1 - i); // ???: is this logic sound with aggregation
         
           // third item
-        nextStateMartingale.put(nextState, new InPlaceBettingMartingale(0.05, AGGREGATION));
+        nextStateMartingale.put(nextState, new InPlaceBettingMartingale(errorTolerance / (double) k, AGGREGATION));
         InPlaceBettingMartingale third = nextStateMartingale.get(nextState);
         for (int i = 0; i < nextStateMartingale.get(seenState).size(); i++)
           third.observe(0);
@@ -178,7 +180,8 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
     }
     
     if (!nextStateMartingale.containsKey(nextState)) {
-      nextStateMartingale.put(nextState, new InPlaceBettingMartingale(0.05, AGGREGATION));
+      incRunningTransitionCount(); // seeing this (s, a, s') for the first time
+      nextStateMartingale.put(nextState, new InPlaceBettingMartingale(errorTolerance / (double) k, AGGREGATION));
       InPlaceBettingMartingale new_obs = nextStateMartingale.get(nextState);
       for (int i = 0; i < nextStateMartingale.get(seenState).size(); i++)
         new_obs.observe(0);
@@ -193,6 +196,25 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
         }
       }
     );
+  }
+
+  void incRunningTransitionCount() {
+    K++;
+    if (K > k) {
+      // System.out.format("Recomputing from alpha = %.4e (k = %d)", errorTolerance / (double) k, k);
+
+      k = 2 * k;
+
+      // System.out.format(" to alpha = %.4e (k = %d)\n", errorTolerance / (double) k, k);
+
+      martingaleMap.forEach((_0, actionMartingale) -> {
+        actionMartingale.forEach((_1, nexStateMartingale) -> {
+          nexStateMartingale.first.forEach((_2, martingale) -> {
+            martingale.recompute(errorTolerance / (double) k);
+          });
+        });
+      });
+    }
   }
 
   @Override
@@ -292,6 +314,7 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
 
     handleComponents();
 
+    values.resetBounds(); // XXX: this only needs to be reset if alpha is reset
     initSinkStates();
 
     // the update function is ran until there has been some progress, i.e., the upper bounds of some state have been changed.
