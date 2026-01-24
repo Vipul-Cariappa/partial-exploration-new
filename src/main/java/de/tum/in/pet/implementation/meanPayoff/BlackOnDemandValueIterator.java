@@ -32,6 +32,7 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
   protected final double pMin; // as mentioned in CAV'19. It should be set to the lowest transition probability of the input model.
   protected final double errorTolerance; // as mentioned in CAV'19. Error tolerance for the learned distributions of the learned model.
   protected final long numberOfTransitions;
+  protected final int aggregationCount;
   private long K = 0; // running count of number of transitions
   private long k = 10; // running overestimate of number of transitions
   protected final Double2LongFunction nSampleFunction; // returns N_k for each k as in CAV'19. Returns the number of times paths should be sampled for each value of k.
@@ -59,8 +60,8 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
 
   public BlackOnDemandValueIterator(Explorer<S, M> explorer, UnboundedValues values, RewardGenerator<S> rewardGenerator,
                                     int revisitThreshold, double rMax, double pMin, double errorTolerance,
-                                    Double2LongFunction nSampleFunction, double precision, long numberOfTransitions, long timeout,
-                                    boolean getErrorProbability, SimulateMec simulateMec,
+                                    Double2LongFunction nSampleFunction, double precision, long numberOfTransitions, 
+                                    int aggregationCount, long timeout, boolean getErrorProbability, SimulateMec simulateMec,
                                     DeltaTCalculationMethod deltaTCalculationMethod, int maxSuccessorsInModel) {
     super(explorer, values, rewardGenerator, revisitThreshold, rMax, precision, timeout);
     this.pMin = pMin;
@@ -71,6 +72,7 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
     this.deltaTCalculationMethod = deltaTCalculationMethod;
     this.maxSuccessorsInModel = maxSuccessorsInModel;
     this.numberOfTransitions = numberOfTransitions;
+    this.aggregationCount = aggregationCount;
 
     // System.out.println("Using alpha = " + (errorTolerance / numberOfTransitions) + " for Martingales");
 
@@ -137,7 +139,6 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
 //  }
 
   public void updateMartingaleTransitions(int currentState, int actionIndex, int nextState) {
-    int AGGREGATION = 1; // -1 to dynamically decide, -2 to aggregate more if we are confident
     martingaleMap.putIfAbsent(currentState, new HashMap<>());
     HashMap<Integer, Pair<HashMap<Integer, InPlaceBettingMartingale>, Pair<Integer, Integer>>> actionMartingales = martingaleMap.get(currentState);
 
@@ -160,13 +161,13 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
         incRunningTransitionCount(); // seeing this (s, a, s') for the first time
         // insert two next items into nextStateMartingale, create old samples
         // second item
-        nextStateMartingale.put(secondSeenState, new InPlaceBettingMartingale(errorTolerance / (double) k, AGGREGATION));
+        nextStateMartingale.put(secondSeenState, new InPlaceBettingMartingale(errorTolerance / (double) k, aggregationCount));
         InPlaceBettingMartingale second = nextStateMartingale.get(secondSeenState);
         for (double i: second.samples.elements)
           second.observe(1 - i); // ???: is this logic sound with aggregation
         
           // third item
-        nextStateMartingale.put(nextState, new InPlaceBettingMartingale(errorTolerance / (double) k, AGGREGATION));
+        nextStateMartingale.put(nextState, new InPlaceBettingMartingale(errorTolerance / (double) k, aggregationCount));
         InPlaceBettingMartingale third = nextStateMartingale.get(nextState);
         for (int i = 0; i < nextStateMartingale.get(seenState).size(); i++)
           third.observe(0);
@@ -181,7 +182,7 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
     
     if (!nextStateMartingale.containsKey(nextState)) {
       incRunningTransitionCount(); // seeing this (s, a, s') for the first time
-      nextStateMartingale.put(nextState, new InPlaceBettingMartingale(errorTolerance / (double) k, AGGREGATION));
+      nextStateMartingale.put(nextState, new InPlaceBettingMartingale(errorTolerance / (double) k, aggregationCount));
       InPlaceBettingMartingale new_obs = nextStateMartingale.get(nextState);
       for (int i = 0; i < nextStateMartingale.get(seenState).size(); i++)
         new_obs.observe(0);

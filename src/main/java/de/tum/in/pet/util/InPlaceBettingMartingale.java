@@ -21,17 +21,17 @@ public class InPlaceBettingMartingale {
     VectorDouble lambda = new VectorDouble();
     double base_aggregation_count = 5;
 
-    private int decide_aggregation_count() {
-        double current_mean = (confidence.second + confidence.first) / 2.0;
-        double mean = (current_mean <= 0.5) ? current_mean : (1 - current_mean);
-        double aggregation_count = mean * 198 + 1; // using range [1, 100]
-        double adjusted_confidence_width = Math.pow(confidence.second - confidence.first, 8.0);
-        double aggregate_count_adjusted_to_confidence = (1 - adjusted_confidence_width) * aggregation_count + adjusted_confidence_width * base_aggregation_count;
-        // System.out.println("mean: " + current_mean + " confidence width: " + (confidence.second - confidence.first) + " aggregation count: " + aggregate_count_adjusted_to_confidence);
-        return (int)Math.round(aggregate_count_adjusted_to_confidence);
-    }
+    // private int decide_aggregation_count2() {
+    //     double current_mean = (confidence.second + confidence.first) / 2.0;
+    //     double mean = (current_mean <= 0.5) ? current_mean : (1 - current_mean);
+    //     double aggregation_count = mean * 198 + 1; // using range [1, 100]
+    //     double adjusted_confidence_width = Math.pow(confidence.second - confidence.first, 8.0);
+    //     double aggregate_count_adjusted_to_confidence = (1 - adjusted_confidence_width) * aggregation_count + adjusted_confidence_width * base_aggregation_count;
+    //     // System.out.println("mean: " + current_mean + " confidence width: " + (confidence.second - confidence.first) + " aggregation count: " + aggregate_count_adjusted_to_confidence);
+    //     return (int)Math.round(aggregate_count_adjusted_to_confidence);
+    // }
     
-    private int decide_aggregation_count2() {
+    private int decide_aggregation_count() {
         double confidence_width = confidence.second - confidence.first;
         double aggregate_count = (1 - confidence_width) * 98 + 1;
         return (int)Math.round(aggregate_count);
@@ -87,10 +87,10 @@ public class InPlaceBettingMartingale {
         if (aggregate != 1) {
             aggregate_cache.add(sample);
             double aggregate = this.aggregate;
-            if (aggregate == -1)
+            if (aggregate < 1)
                 aggregate = decide_aggregation_count();
-            else if (aggregate == -2)
-                aggregate = decide_aggregation_count2();
+            // else if (aggregate == -2)
+            //     aggregate = decide_aggregation_count2();
             if (aggregate_cache.size() < aggregate)
                 return;
 

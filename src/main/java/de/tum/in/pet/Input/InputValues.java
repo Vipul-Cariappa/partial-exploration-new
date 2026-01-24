@@ -7,6 +7,7 @@ import de.tum.in.pet.sampler.SuccessorHeuristic;
 import de.tum.in.probmodels.explorer.InformationLevel;
 
 public class InputValues {
+    public final int aggregationCount;
     public final long numberOfTransitions;
     public final double precision;
     public final int revisitThreshold;
@@ -31,7 +32,7 @@ public class InputValues {
                        int iterSamples, long timeout, boolean getErrorProbability, SuccessorHeuristic successorHeuristic,
                        InformationLevel informationLevel, UpdateMethod updateMethod, String rewardStructure, boolean solveUsingQP,
                        SimulateMec simulateMec, String outputPath, int maxSuccessorsInModel, DeltaTCalculationMethod deltaTCalculationMethod,
-                       long numberOfTransitions) {
+                       long numberOfTransitions, int aggregationCount) {
         this.precision = precision;
         this.revisitThreshold = revisitThreshold;
         this.maxReward = maxReward;
@@ -50,5 +51,6 @@ public class InputValues {
         this.maxSuccessorsInModel = maxSuccessorsInModel;
         this.deltaTCalculationMethod = deltaTCalculationMethod;
         this.numberOfTransitions = numberOfTransitions;
+        this.aggregationCount = aggregationCount;
     }
 }
