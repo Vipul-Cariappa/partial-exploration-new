@@ -33,12 +33,12 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
   protected final double errorTolerance; // as mentioned in CAV'19. Error tolerance for the learned distributions of the learned model.
   protected final long numberOfTransitions;
   protected final int aggregationCount;
-  private long K = 0; // running count of number of transitions
-  private long k = 10; // running overestimate of number of transitions
+  // private long K = 0; // running count of number of transitions
+  // private long k = 10; // running overestimate of number of transitions
   protected final Double2LongFunction nSampleFunction; // returns N_k for each k as in CAV'19. Returns the number of times paths should be sampled for each value of k.
 
   protected List<NatBitSet> mecs = new ArrayList<>(); // Holds a list of mecs in the model.
-  protected Double transDelta = 1d; // equal to delta_T as mentioned in CAV'19. Error tolerance for each transition of the learned model.
+  protected final double transDelta; // equal to delta_T as mentioned in CAV'19. Error tolerance for each transition of the learned model.
 
   protected final Int2IntMap stateToMecMap = new Int2IntOpenHashMap(); // Map that returns the mec Index the state is a part of.
   protected Int2ObjectMap<Distribution> stayActionMap = new Int2ObjectOpenHashMap<>(); // Map that holds the stay action for mecs, accessible using mecIndices.
@@ -50,8 +50,8 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
   // Enable this boolean only when the updateMethod is greyBox.
   private final boolean calculateErrorProbability;
   private final SimulateMec simulateMec;
-  private final int maxSuccessorsInModel;
-  private final DeltaTCalculationMethod deltaTCalculationMethod;
+  // private final int maxSuccessorsInModel;
+  // private final DeltaTCalculationMethod deltaTCalculationMethod;
 
   protected static final double initialNSamples = 1e4;
   protected static final double multiplicativeFactor = 5;
@@ -69,12 +69,14 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
     this.nSampleFunction = nSampleFunction;
     this.calculateErrorProbability = getErrorProbability;
     this.simulateMec = simulateMec;
-    this.deltaTCalculationMethod = deltaTCalculationMethod;
-    this.maxSuccessorsInModel = maxSuccessorsInModel;
+    // this.deltaTCalculationMethod = deltaTCalculationMethod;
+    // this.maxSuccessorsInModel = maxSuccessorsInModel;
     this.numberOfTransitions = numberOfTransitions;
     this.aggregationCount = aggregationCount;
+    this.transDelta = errorTolerance / numberOfTransitions;
 
     // System.out.println("Using alpha = " + (errorTolerance / numberOfTransitions) + " for Martingales");
+    // System.out.println("Using transDelta = " + transDelta);
 
     BlackUnboundedReachValues blackValues = (BlackUnboundedReachValues) this.values;
     
@@ -114,6 +116,8 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
 
     // Updates the confidence width function in UnboundedReachValues.
     blackValues.setConfidenceWidthFunction(confidenceWidthFunction);
+
+    initSinkStates();
   }
 
   @Override
@@ -154,20 +158,20 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
       } else if (secondSeenState == nextState) {
         nextStateMartingale.get(seenState).observe(0);
       } else if (secondSeenState == -1) {
-        incRunningTransitionCount(); // seeing this (s, a, s') for the first time
+        // incRunningTransitionCount(); // seeing this (s, a, s') for the first time
         actionMartingales.get(actionIndex).second.second = nextState;
         nextStateMartingale.get(seenState).observe(0);
       } else {
-        incRunningTransitionCount(); // seeing this (s, a, s') for the first time
+        // incRunningTransitionCount(); // seeing this (s, a, s') for the first time
         // insert two next items into nextStateMartingale, create old samples
         // second item
-        nextStateMartingale.put(secondSeenState, new InPlaceBettingMartingale(errorTolerance / (double) k, aggregationCount));
+        nextStateMartingale.put(secondSeenState, new InPlaceBettingMartingale(transDelta, aggregationCount));
         InPlaceBettingMartingale second = nextStateMartingale.get(secondSeenState);
         for (double i: second.samples.elements)
           second.observe(1 - i); // ???: is this logic sound with aggregation
         
           // third item
-        nextStateMartingale.put(nextState, new InPlaceBettingMartingale(errorTolerance / (double) k, aggregationCount));
+        nextStateMartingale.put(nextState, new InPlaceBettingMartingale(transDelta, aggregationCount));
         InPlaceBettingMartingale third = nextStateMartingale.get(nextState);
         for (int i = 0; i < nextStateMartingale.get(seenState).size(); i++)
           third.observe(0);
@@ -181,8 +185,8 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
     }
     
     if (!nextStateMartingale.containsKey(nextState)) {
-      incRunningTransitionCount(); // seeing this (s, a, s') for the first time
-      nextStateMartingale.put(nextState, new InPlaceBettingMartingale(errorTolerance / (double) k, aggregationCount));
+      // incRunningTransitionCount(); // seeing this (s, a, s') for the first time
+      nextStateMartingale.put(nextState, new InPlaceBettingMartingale(transDelta, aggregationCount));
       InPlaceBettingMartingale new_obs = nextStateMartingale.get(nextState);
       for (int i = 0; i < nextStateMartingale.get(seenState).size(); i++)
         new_obs.observe(0);
@@ -199,24 +203,24 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
     );
   }
 
-  void incRunningTransitionCount() {
-    K++;
-    if (K > k) {
-      // System.out.format("Recomputing from alpha = %.4e (k = %d)", errorTolerance / (double) k, k);
+  // void incRunningTransitionCount() {
+  //   K++;
+  //   if (K > k) {
+  //     // System.out.format("Recomputing from alpha = %.4e (k = %d)", errorTolerance / (double) k, k);
 
-      k = 2 * k;
+  //     k = 2 * k;
 
-      // System.out.format(" to alpha = %.4e (k = %d)\n", errorTolerance / (double) k, k);
+  //     // System.out.format(" to alpha = %.4e (k = %d)\n", errorTolerance / (double) k, k);
 
-      martingaleMap.forEach((_0, actionMartingale) -> {
-        actionMartingale.forEach((_1, nexStateMartingale) -> {
-          nexStateMartingale.first.forEach((_2, martingale) -> {
-            martingale.recompute(errorTolerance / (double) k);
-          });
-        });
-      });
-    }
-  }
+  //     martingaleMap.forEach((_0, actionMartingale) -> {
+  //       actionMartingale.forEach((_1, nexStateMartingale) -> {
+  //         nexStateMartingale.first.forEach((_2, martingale) -> {
+  //           martingale.recompute(errorTolerance / (double) k);
+  //         });
+  //       });
+  //     });
+  //   }
+  // }
 
   @Override
   protected boolean sample(int initialState, int run) throws PrismException {
@@ -315,8 +319,8 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
 
     handleComponents();
 
-    values.resetBounds(); // XXX: this only needs to be reset if alpha is reset
-    initSinkStates();
+    // values.resetBounds(); // XXX: this only needs to be reset if alpha is reset
+    // initSinkStates();
 
     // the update function is ran until there has been some progress, i.e., the upper bounds of some state have been changed.
     // if there has been change, this change needs to be propagated through the rest of the states.
@@ -333,15 +337,15 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
   }
 
   private void computeDeltaT(BlackExplorer<S, M> explorer, double errorTolerance) {
-    switch (deltaTCalculationMethod) {
-      case P_MIN:
-        transDelta = errorTolerance *pMin/ explorer.getNumExploredActions();
-        break;
+    // switch (deltaTCalculationMethod) {
+    //   case P_MIN:
+    //     transDelta = errorTolerance *pMin/ explorer.getNumExploredActions();
+    //     break;
 
-      case MAX_SUCCESSORS:
-        transDelta = errorTolerance / (explorer.getNumExploredActions() * maxSuccessorsInModel);
-        break;
-    }
+    //   case MAX_SUCCESSORS:
+    //     transDelta = errorTolerance / (explorer.getNumExploredActions() * maxSuccessorsInModel);
+    //     break;
+    // }
 
     explorer.updateCountParams(transDelta, pMin);
   }
