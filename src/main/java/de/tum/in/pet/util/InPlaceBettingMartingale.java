@@ -33,7 +33,7 @@ public class InPlaceBettingMartingale {
     
     private int decide_aggregation_count() {
         double confidence_width = confidence.second - confidence.first;
-        double aggregate_count = (1 - confidence_width) * 98 + 1;
+        double aggregate_count = (1 - confidence_width) * 99 + 1;
         return (int)Math.round(aggregate_count);
     }
 
