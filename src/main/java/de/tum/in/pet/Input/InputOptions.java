@@ -6,6 +6,7 @@ import org.apache.commons.cli.Options;
 
 // On adding new option, make sure to add them to getAllInputOptions method
 public class InputOptions {
+    public static Option numberOfTransitions = new Option(null, "numberOfTransitions", true, "Upper bound on total transitions in the model. (Default: 10^7)");
     public static Option precisionOption = new Option(null, "precision", true, "Required precision of the returned value. (Default: 10^{-6})");
     public static Option heuristicOption = CliHelper.getDefaultHeuristicOption();
     public static Option modelOption = new Option("m", "model", true, "Path to model file");
@@ -33,6 +34,7 @@ public class InputOptions {
         return new Options()
                 .addOption(modelOption)
                 .addOption(constantsOption)
+                .addOption(numberOfTransitions)
                 .addOption(precisionOption)
                 .addOption(heuristicOption)
                 .addOption(revisitThresholdOption)
