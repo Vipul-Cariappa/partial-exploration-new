@@ -102,6 +102,7 @@ public class BlackUnboundedReachValues extends UnboundedReachValues{
       Bounds successorBounds = bounds(successor);
       // mean of the transition
       Pair<Double, Double> CW = confidenceWidth.apply(successor);
+      assert CW.first <= CW.second;
       double probability;
       if (CW.first == -1)
         probability = Math.max(0, entry.getDoubleValue());

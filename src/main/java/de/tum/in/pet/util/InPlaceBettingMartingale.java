@@ -196,8 +196,7 @@ public class InPlaceBettingMartingale {
         if (samples.size() > last_computed_at) {
             last_computed_at = samples.size();
             confidence = confidence_width(confidence.first, confidence.second);
-            // if ((confidence.first < 0.0) || (confidence.first > 1.0))
-            //     System.out.println("Illegal value of lower bound of confidence width");
+            assert confidence.first <= confidence.second;
         }
         return confidence;
     }

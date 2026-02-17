@@ -108,8 +108,11 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
 
       if (nexStateMartingaleMap.containsKey(next_state))
         return nexStateMartingaleMap.get(next_state).getConfidenceWidth();
-      if (next_state == seenState || next_state == secondSeenState)
-        return nexStateMartingaleMap.get(seenState).getConfidenceWidth();
+      if (next_state == seenState || next_state == secondSeenState) {
+        // returning 1 - confidence
+        Pair<Double, Double> confidence = nexStateMartingaleMap.get(seenState).getConfidenceWidth();
+        return new Pair<>(1 - confidence.second, 1 - confidence.first);
+      }
       return new Pair<Double,Double>(0.0, 1.0);
 //      logger.log(Level.INFO, max + " - " + oldConfidenceWidthFunction.get(state).get(action));
     });
