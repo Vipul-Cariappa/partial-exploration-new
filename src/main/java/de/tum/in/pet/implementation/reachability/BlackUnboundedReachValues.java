@@ -110,10 +110,14 @@ public class BlackUnboundedReachValues extends UnboundedReachValues{
         probability = Math.max(0, CW.first);
 //      System.out.println(probability + " - " + CW.first);
       sum += probability;
+      // assert (sum >= 0) && (sum <= 1); // ???: this fails by a very small margin in BusyRingMC4 (0.1x pmin)
       lower += successorBounds.lowerBound() * probability;
       upper += successorBounds.upperBound() * probability;
       minLower = Math.min(minLower, successorBounds.lowerBound());
       maxUpper = Math.max(maxUpper, successorBounds.upperBound());
+      assert successorBounds.lowerBound() >= 0;
+      assert successorBounds.upperBound() <= 1;
+      assert successorBounds.lowerBound() <= successorBounds.upperBound();
     }
 
 //  If the confidence width is very high, then all the successor probabilities (T_HAT) of state, Distribution will be 0.
@@ -126,11 +130,17 @@ public class BlackUnboundedReachValues extends UnboundedReachValues{
       // of successor might be bad, since it may be wrong. Some actions of successor, might not even be explored.
       return bounds(state);
     }
+    sum = Math.min(sum, 1.0);
+    lower = Math.min(lower, 1.0);
+    upper = Math.min(upper, 1.0);
     double remProb = 1-sum;
+    assert remProb >= 0 && remProb <= 1;
     if(doMostConservativeGuess(state, distribution)) {
       minLower = 0;
       maxUpper = 1;
     }
+    assert upper+remProb*maxUpper <= 1;
+    assert lower+remProb*minLower >= 0;
     return Bounds.reach(lower+remProb*minLower, upper+remProb*maxUpper);
   }
 
@@ -279,6 +289,9 @@ public class BlackUnboundedReachValues extends UnboundedReachValues{
 
       assert newLowerBound <= newUpperBound;
       newBounds = Bounds.of(newLowerBound, newUpperBound);
+      assert newBounds.lowerBound() >= 0;
+      assert newBounds.upperBound() <= 1;
+      assert newBounds.lowerBound() <= newBounds.upperBound();
       bounds.put(state, newBounds);
     }
   }

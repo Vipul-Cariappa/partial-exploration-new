@@ -197,6 +197,8 @@ public class InPlaceBettingMartingale {
             last_computed_at = samples.size();
             confidence = confidence_width(confidence.first, confidence.second);
             assert confidence.first <= confidence.second;
+            assert confidence.first >= 0;
+            assert confidence.second <= 1;
         }
         return confidence;
     }
