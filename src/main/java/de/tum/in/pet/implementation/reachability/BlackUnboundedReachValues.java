@@ -110,7 +110,7 @@ public class BlackUnboundedReachValues extends UnboundedReachValues{
         probability = Math.max(0, CW.first);
 //      System.out.println(probability + " - " + CW.first);
       sum += probability;
-      // assert (sum >= 0) && (sum <= 1); // ???: this fails by a very small margin in BusyRingMC4 (0.1x pmin)
+      assert (sum >= 0) && (sum <= 1);
       lower += successorBounds.lowerBound() * probability;
       upper += successorBounds.upperBound() * probability;
       minLower = Math.min(minLower, successorBounds.lowerBound());
@@ -130,9 +130,6 @@ public class BlackUnboundedReachValues extends UnboundedReachValues{
       // of successor might be bad, since it may be wrong. Some actions of successor, might not even be explored.
       return bounds(state);
     }
-    sum = Math.min(sum, 1.0);
-    lower = Math.min(lower, 1.0);
-    upper = Math.min(upper, 1.0);
     double remProb = 1-sum;
     assert remProb >= 0 && remProb <= 1;
     if(doMostConservativeGuess(state, distribution)) {

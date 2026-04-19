@@ -110,14 +110,14 @@ public class InPlaceBettingMartingale {
         samples_cumulative_sum += sample;
 
         // lazy compute mut_hat_t
-        double mu_hat_t = Math.min((samples_cumulative_sum + fake_obs + prior_mean) / (samples_count + fake_obs), 1);
+        double mu_hat_t = (samples_cumulative_sum + fake_obs * prior_mean) / (samples_count + fake_obs);
         
         // lazy compute sigma2_t
+        double sigma2_t = (samples_mean_diff_sq + (fake_obs * prior_variance)) / samples_count;
         samples_mean_diff_sq += Math.pow(sample - mu_hat_t, 2.0);
-        double sigma2_t = (samples_mean_diff_sq + (fake_obs * prior_variance)) / (samples_count + fake_obs);
 
         // lazy compute lambda
-        double lambda_i = Math.sqrt((2.0 * Math.log(2.0 / alpha)) / ((samples.size() * Math.log(samples.size() + 1.0)) * (sigma2_t)));
+        double lambda_i = Math.sqrt((2.0 * Math.log(2.0 / alpha)) / (samples_count * Math.log(samples_count + fake_obs) * (sigma2_t)));
         lambda.append(lambda_i);
     }
 
@@ -146,7 +146,6 @@ public class InPlaceBettingMartingale {
         Pair<VectorDouble, VectorDouble> r = BettingMartingale.confidence_sequence_from_martingale(samples, lambda, breaks, break_start, break_stop, alpha, running_intersection, theta, trunc_scale);
         VectorDouble l = r.first;
         VectorDouble u = r.second;
-        // return VectorDouble.index(u, u.size() - 1) - VectorDouble.index(l, l.size() - 1);
         return new Pair<>(VectorDouble.index(l, l.size() - 1), VectorDouble.index(u, u.size() - 1));
     }
 
@@ -169,11 +168,10 @@ public class InPlaceBettingMartingale {
                 }
                 double mart_mid_plus_h = BettingMartingale.diversified_betting_mart(samples, lambda, mid + compute_delta, alpha, 0.5, 0.5).back();
                 double df = 0;
-                if (pos) {
+                if (pos)
                     df = mart_mid_plus_h - mart_mid;
-                } else {
+                else
                     df = mart_mid - mart_mid_plus_h;
-                }
                 if (df > 0)
                     high = mid;
                 else

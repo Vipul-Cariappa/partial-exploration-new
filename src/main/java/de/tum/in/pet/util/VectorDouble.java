@@ -13,6 +13,13 @@ public class VectorDouble {
         this.capacity = size;
     }
 
+    public VectorDouble(int size, double value) {
+        elements = new double[size];
+        this.capacity = size;
+        this.size = this.elements.length;
+        Arrays.fill(this.elements, value);
+    }
+
     public VectorDouble(double... elements) {
         this.elements = elements;
         size = this.elements.length;
