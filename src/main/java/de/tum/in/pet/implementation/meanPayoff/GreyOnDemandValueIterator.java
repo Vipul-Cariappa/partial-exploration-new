@@ -1,5 +1,7 @@
 package de.tum.in.pet.implementation.meanPayoff;
 
+import java.util.function.IntPredicate;
+
 import de.tum.in.pet.implementation.reachability.GreyUnboundedReachValues;
 import de.tum.in.pet.sampler.UnboundedValues;
 import de.tum.in.probmodels.explorer.Explorer;
@@ -18,9 +20,10 @@ public class GreyOnDemandValueIterator<S, M extends Model> extends BlackOnDemand
     public GreyOnDemandValueIterator(Explorer<S, M> explorer, UnboundedValues values, RewardGenerator<S> rewardGenerator,
                                      int revisitThreshold, double rMax, double pMin, double errorTolerance,
                                      Double2LongFunction nSampleFunction, double precision, long numberOfTransitions, int aggregationCount, long timeout,
-                                     SimulateMec simulateMec, DeltaTCalculationMethod deltaTCalculationMethod, int maxSuccessorsInModel) {
+                                     SimulateMec simulateMec, DeltaTCalculationMethod deltaTCalculationMethod, int maxSuccessorsInModel,
+                                     IntPredicate target) {
         super(explorer, values, rewardGenerator, revisitThreshold, rMax, pMin, errorTolerance, nSampleFunction, precision,
-                numberOfTransitions, aggregationCount, timeout, false, simulateMec, deltaTCalculationMethod, maxSuccessorsInModel);
+                numberOfTransitions, aggregationCount, timeout, false, simulateMec, deltaTCalculationMethod, maxSuccessorsInModel, target);
 
         initGreyUnboundedReachValues();
     }

@@ -19,6 +19,7 @@ public class InputParser {
         CommandLine commandLine = CliHelper.parse(options, args);
 
         int aggregationCount = parseIntOption(commandLine, InputOptions.aggregationCount, DefaultInputValues.aggregationCount);
+        String targetLabel = parseOption(commandLine, InputOptions.targetLabel, DefaultInputValues.targetLabel, Function.identity());
         long numberOfTransitions = parseLongOption(commandLine, InputOptions.numberOfTransitions, DefaultInputValues.numberOfTransitions);
         double precision = parseDoubleOption(commandLine, InputOptions.precisionOption, DefaultInputValues.PRECISION);
         int revisitThreshold = parseIntOption(commandLine, InputOptions.revisitThresholdOption, DefaultInputValues.THRESHOLD);
@@ -70,7 +71,8 @@ public class InputParser {
                 maxSuccessorsInModel,
                 deltaTMethod,
                 numberOfTransitions,
-                aggregationCount);
+                aggregationCount,
+                targetLabel);
     }
 
     private static long parseLongOption(CommandLine commandLine, Option option, long defaultValue) {

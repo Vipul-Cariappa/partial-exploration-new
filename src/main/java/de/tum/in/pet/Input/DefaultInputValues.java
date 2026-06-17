@@ -21,5 +21,6 @@ public class DefaultInputValues {
     public static final UpdateMethod UPDATE_METHOD = UpdateMethod.GREYBOX;
     public static final SimulateMec SIMULATE_MEC = SimulateMec.HEURISTIC;
     public static final String OUTPUT_PATH = "temp.txt";
+    public static final String targetLabel = "target";
     public static final DeltaTCalculationMethod DELTA_T_CALCULATION_METHOD = DeltaTCalculationMethod.P_MIN;
 }
