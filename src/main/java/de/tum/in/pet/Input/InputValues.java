@@ -7,6 +7,7 @@ import de.tum.in.pet.sampler.SuccessorHeuristic;
 import de.tum.in.probmodels.explorer.InformationLevel;
 
 public class InputValues {
+    public final long numberOfTransitions;
     public final double precision;
     public final int revisitThreshold;
     public final double maxReward;
@@ -24,12 +25,14 @@ public class InputValues {
     public final String outputPath;
     public final int maxSuccessorsInModel;
     public final DeltaTCalculationMethod deltaTCalculationMethod;
+    public final String targetLabel;
 
 
     public InputValues(double precision, int revisitThreshold, double maxReward, double pMin, double errorTolerance,
                        int iterSamples, long timeout, boolean getErrorProbability, SuccessorHeuristic successorHeuristic,
                        InformationLevel informationLevel, UpdateMethod updateMethod, String rewardStructure, boolean solveUsingQP,
-                       SimulateMec simulateMec, String outputPath, int maxSuccessorsInModel, DeltaTCalculationMethod deltaTCalculationMethod) {
+                       SimulateMec simulateMec, String outputPath, int maxSuccessorsInModel, DeltaTCalculationMethod deltaTCalculationMethod,
+                       long numberOfTransitions, String targetLabel) {
         this.precision = precision;
         this.revisitThreshold = revisitThreshold;
         this.maxReward = maxReward;
@@ -47,5 +50,7 @@ public class InputValues {
         this.outputPath = outputPath;
         this.maxSuccessorsInModel = maxSuccessorsInModel;
         this.deltaTCalculationMethod = deltaTCalculationMethod;
+        this.numberOfTransitions = numberOfTransitions;
+        this.targetLabel = targetLabel;
     }
 }

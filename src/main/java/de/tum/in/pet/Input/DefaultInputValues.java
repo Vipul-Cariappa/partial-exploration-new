@@ -7,6 +7,7 @@ import de.tum.in.pet.sampler.SuccessorHeuristic;
 import de.tum.in.probmodels.explorer.InformationLevel;
 
 public class DefaultInputValues {
+    public static final long numberOfTransitions = 10_000_000L;
     public static final double PRECISION = 1.0e-6;
     public static final int THRESHOLD = 5;
     public static final double REWARD_UPPERBOUND = 10;
@@ -19,5 +20,6 @@ public class DefaultInputValues {
     public static final UpdateMethod UPDATE_METHOD = UpdateMethod.GREYBOX;
     public static final SimulateMec SIMULATE_MEC = SimulateMec.HEURISTIC;
     public static final String OUTPUT_PATH = "temp.txt";
+    public static final String targetLabel = "target";
     public static final DeltaTCalculationMethod DELTA_T_CALCULATION_METHOD = DeltaTCalculationMethod.P_MIN;
 }

@@ -18,6 +18,7 @@ import prism.Pair;
 import prism.PrismException;
 
 import java.util.*;
+import java.util.function.IntPredicate;
 import java.util.logging.Level;
 
 import static de.tum.in.probmodels.util.Util.isZero;
@@ -30,6 +31,7 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
 
   protected final double pMin; // as mentioned in CAV'19. It should be set to the lowest transition probability of the input model.
   protected final double errorTolerance; // as mentioned in CAV'19. Error tolerance for the learned distributions of the learned model.
+  protected final long numberOfTransitions;
   protected final Double2LongFunction nSampleFunction; // returns N_k for each k as in CAV'19. Returns the number of times paths should be sampled for each value of k.
 
   protected List<NatBitSet> mecs = new ArrayList<>(); // Holds a list of mecs in the model.
@@ -47,15 +49,17 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
   private final SimulateMec simulateMec;
   private final int maxSuccessorsInModel;
   private final DeltaTCalculationMethod deltaTCalculationMethod;
+  private final IntPredicate target;
 
   protected static final double initialNSamples = 1e4;
   protected static final double multiplicativeFactor = 5;
 
   public BlackOnDemandValueIterator(Explorer<S, M> explorer, UnboundedValues values, RewardGenerator<S> rewardGenerator,
                                     int revisitThreshold, double rMax, double pMin, double errorTolerance,
-                                    Double2LongFunction nSampleFunction, double precision, long timeout,
+                                    Double2LongFunction nSampleFunction, double precision, long numberOfTransitions, long timeout,
                                     boolean getErrorProbability, SimulateMec simulateMec,
-                                    DeltaTCalculationMethod deltaTCalculationMethod, int maxSuccessorsInModel) {
+                                    DeltaTCalculationMethod deltaTCalculationMethod, int maxSuccessorsInModel,
+                                    IntPredicate target) {
     super(explorer, values, rewardGenerator, revisitThreshold, rMax, precision, timeout);
     this.pMin = pMin;
     this.errorTolerance = errorTolerance;
@@ -64,6 +68,10 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
     this.simulateMec = simulateMec;
     this.deltaTCalculationMethod = deltaTCalculationMethod;
     this.maxSuccessorsInModel = maxSuccessorsInModel;
+    this.numberOfTransitions = numberOfTransitions;
+    this.target = target;
+
+    // System.out.println("Using alpha = " + (errorTolerance / numberOfTransitions) + " for Martingales");
   }
 
   @Override
@@ -110,26 +118,12 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
         stateVisitCounts.putIfAbsent(currentState, 0);
         stateVisitCounts.addTo(currentState, 1);
 
-        // checks plus state,minus state and uncertain state
-        if (BoundedMecQuotient.isSinkState(currentState)) {
-          visitStack.removeInt(visitStack.size() - 1);
-          // We update the MEC reward bounds through running VI if we reach the uncertain or the plus state. This is
-          // slightly different from the version in CAV'17 where VI is only run when the uncertain state is reached.
-          // However, this is also OK as reaching the plus state shows that probably the lower reward bound is high
-          // enough, meaning the EC is promising and it is worth getting a more precise value. We make sure in updateMEC
-          // that we don't get value that is more precise than what is required.
-          if (BoundedMecQuotient.isUncertainState(currentState)||BoundedMecQuotient.isPlusState(currentState)) {
-            int mecIndex = stateToMecMap.get(visitStack.removeInt(visitStack.size() - 1));
-            explorer.activateActionCountFilter();
-            updateMec(mecIndex);
-            explorer.deactivateActionCountFilter();
-          }
-          break;
-        }
 
         if (!explorer().isExploredState(currentState)) {
           explore(currentState);  // action choices etc. are populated in the partial model. The bounds of currentState are also initialised.
         }
+
+        if (target.test(currentState)) { break; }
 
         List<Distribution> choices = choices(currentState);
         if (choices.isEmpty()){
@@ -140,10 +134,15 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
         // This condition is there as in the simulate function in CAV'19. It checks whether we have been returning to a
         // state too many times during simulation indicating that we could be stuck inside an MEC.
         if (stateVisitCounts.get(currentState)>=revisitThreshold && looping(visitStack)) {
-          Pair<Integer, Integer> bestStateActionPairs = getSampledBestLeavingAction(currentState);
-          currentState = bestStateActionPairs.first;
-          nextActionIndex = bestStateActionPairs.second;
-          choices = choices(currentState);
+            Pair<Integer, Integer> bestStateActionPairs = getSampledBestLeavingAction(currentState);
+            currentState = bestStateActionPairs.first;
+            nextActionIndex = bestStateActionPairs.second;
+            if (currentState == -1) {
+                // we do not have any of the augmented s+, s- & s? states
+                // therefore there maynot be an action that exits the given MEC
+                break;
+            }
+            choices = choices(currentState);
         }
         else {
           nextActionIndex = sampleNextAction(currentState);
@@ -151,19 +150,10 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
 
         assert nextActionIndex != -1;
 
-        // If the sampled action's index is the last index and state is a part of an mec, then this index of a stay action.
-        // Here, we simply sample the next state. However, if we don't have a stay action, we have to call the explorer to
-        // sample the next state according to the real distributions.
-        if (nextActionIndex == choices.size()-1 && stateToMecMap.containsKey(currentState)){
-          nextState = choices.get(nextActionIndex).sample();
-          stayActionCounts.put(stateToMecMap.get(currentState), stayActionCounts.get(stateToMecMap.get(currentState))+1);
-        }
-        else {
-          nextState = explorer.simulateAction(currentState, nextActionIndex);
-          // If this action has been sampled enough number of times, we know that it can now be considered as a part of an MEC.
-          // Hence, we know that there might be new MECs in the model and it could be worthwhile finding them again.
-          seenNewTransitionSignificantly |= explorer.updateCounts(currentState, nextActionIndex, nextState);
-        }
+        nextState = explorer.simulateAction(currentState, nextActionIndex);
+        // If this action has been sampled enough number of times, we know that it can now be considered as a part of an MEC.
+        // Hence, we know that there might be new MECs in the model and it could be worthwhile finding them again.
+        seenNewTransitionSignificantly |= explorer.updateCounts(currentState, nextActionIndex, nextState);
         totalTransitionsSimulated++;
 
         // This is true when the currentState doesn't have any choices from it, i.e. it is a sink state.
@@ -174,16 +164,12 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
         currentState = nextState;
 
         computeDeltaT(explorer, errorTolerance);
-
       }
-
-
     }
 
     handleComponents();
 
     values.resetBounds();
-    initSinkStates();
 
     confidenceWidthFunction = x -> (y -> y < explorer.getChoices(x).size()
             ? Math.sqrt(-Math.log(transDelta)/(2*explorer.getActionCounts(x, y)))
@@ -231,6 +217,9 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
     int mecIndex = stateToMecMap.get(currentState);
     NatBitSet mecStates = this.mecs.get(mecIndex);
     List<Pair<Integer, Integer>> bestActionStatePairs = values.getBestLeavingAction(mecStates, this::choices);
+    if (bestActionStatePairs.isEmpty()) {
+        return new Pair<Integer,Integer>(-1, -1);
+    }
     int sampledActionIndex = randomIntegerSampler.nextInt(bestActionStatePairs.size());
     return bestActionStatePairs.get(sampledActionIndex);
   }
@@ -445,17 +434,6 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
       return;
     }
 
-    // This deflates the values of the states of the new mecs. Further, the stay action is added here.
-
-    for(int i: changedMecs){
-
-      // We need to run VI on the MEC again to account for the following case. It can be that the bounds on the MEC are
-      // already very precise. Thus, the probability of reaching the uncertain state would be very small and we may
-      // never be able to run VI on the newly added states again. Thus, we need to run VI straight after adding new
-      // states.
-      updateMec(i);
-    }
-
     explorer.deactivateActionCountFilter();
 
     for(int i: changedMecs){
@@ -573,11 +551,7 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
     assert explorer.isExploredState(state);
     assert !BoundedMecQuotient.isSinkState(state);
 
-    List<Distribution> choices = new ArrayList<>(explorer.getChoices(state));
-    if (stateToMecMap.containsKey(state)) {
-      choices.add(stayActionMap.get(stateToMecMap.get(state)));
-    }
-    return choices;
+    return new ArrayList<>(explorer.getChoices(state));
   }
 
   @Override

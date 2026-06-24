@@ -18,13 +18,13 @@ import de.tum.in.probmodels.generator.*;
 import de.tum.in.probmodels.model.MarkovDecisionProcess;
 import de.tum.in.probmodels.model.Model;
 import de.tum.in.probmodels.util.PrismHelper;
+import de.tum.in.probmodels.util.PrismWrappedException;
 import it.unimi.dsi.fastutil.doubles.Double2LongFunction;
 import org.apache.commons.cli.CommandLine;
 import parser.State;
 import parser.ast.ModulesFile;
 import prism.*;
 import simulator.ModulesFileModelGenerator;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -104,14 +104,24 @@ public final class MeanPayoffChecker {
 
   }
 
-  private static <S, M extends Model> double solve(M partialModel, Generator<S> generator, RewardGenerator<S> rewardGenerator,
-                                                   InputValues ip)
+  private static <S extends State, M extends Model> double solve(ModelGenerator prismGenerator, M partialModel, Generator<S> generator, RewardGenerator<S> rewardGenerator,
+                                                                 InputValues ip)
           throws PrismException {
 
     var explorer = Explorers.getExplorer(partialModel, generator, ip.informationLevel, false,
             System.currentTimeMillis() + ip.timeout);
 
-    IntPredicate target = (x) -> x==Integer.MAX_VALUE;
+    IntPredicate target = (state) -> {
+        try {
+            State current_exploring_state = prismGenerator.getExploreState();
+            prismGenerator.exploreState(explorer.getState(state));
+            boolean result = prismGenerator.isLabelTrue(ip.targetLabel);
+            prismGenerator.exploreState(current_exploring_state);
+            return result;
+        } catch (PrismException e) {
+            throw new PrismWrappedException(e);
+        }
+    };
     OnDemandValueIterator<S, M> valueIterator;
 
     if (ip.informationLevel==InformationLevel.WHITEBOX) {
@@ -130,8 +140,9 @@ public final class MeanPayoffChecker {
 
       valueIterator = new BlackOnDemandValueIterator<>(explorer, values, rewardGenerator,
               ip.revisitThreshold, ip.maxReward, ip.pMin, ip.errorTolerance, nSampleFunction,
-              ip.precision / ip.maxReward, System.currentTimeMillis() + ip.timeout, ip.getErrorProbability,
-              ip.simulateMec, ip.deltaTCalculationMethod, ip.maxSuccessorsInModel);
+              ip.precision / ip.maxReward, ip.numberOfTransitions,
+              System.currentTimeMillis() + ip.timeout, ip.getErrorProbability,
+              ip.simulateMec, ip.deltaTCalculationMethod, ip.maxSuccessorsInModel, target);
     }
     else{
       Double2LongFunction nSampleFunction = s -> ip.iterSamples;
@@ -141,8 +152,8 @@ public final class MeanPayoffChecker {
 
       valueIterator = new GreyOnDemandValueIterator<>(explorer, values, rewardGenerator,
               ip.revisitThreshold, ip.maxReward, ip.pMin, ip.errorTolerance, nSampleFunction,
-              ip.precision / ip.maxReward, System.currentTimeMillis()+ip.timeout,
-              ip.simulateMec, ip.deltaTCalculationMethod, ip.maxSuccessorsInModel);
+              ip.precision / ip.maxReward, ip.numberOfTransitions, System.currentTimeMillis()+ip.timeout,
+              ip.simulateMec, ip.deltaTCalculationMethod, ip.maxSuccessorsInModel, target);
     }
 
     valueIterator.run();
@@ -179,7 +190,7 @@ public final class MeanPayoffChecker {
 
     RewardGenerator<State> rewardGenerator = new PrismRewardGenerator(rewardIndex, prismGenerator);
 
-    return solve(partialModel, generator, rewardGenerator, inputValues);
+    return solve(prismGenerator, partialModel, generator, rewardGenerator, inputValues);
 
   }
 
