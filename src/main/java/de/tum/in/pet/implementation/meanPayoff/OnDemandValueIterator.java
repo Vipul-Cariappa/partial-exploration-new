@@ -121,8 +121,6 @@ public class OnDemandValueIterator<S, M extends Model> implements Iterator<S, M>
    */
   public void run() throws PrismException {
 
-    initSinkStates();
-
     logger.log(Level.INFO, "Initialized Sink States.");
 
     int run = 0;
