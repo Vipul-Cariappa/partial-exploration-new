@@ -70,6 +70,17 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
     }
   }
 
+  private static final class BernsteinActionStats {
+    private final HashMap<Integer, BernsteinTransitionStats> transitions = new HashMap<>();
+    private double previousEstimate = 0.0;
+  }
+
+  private static final class BernsteinTransitionStats {
+    private long count = 0L;
+    private double varianceProxy = 0.0;
+    private long lastUpdatedAt = 0L;
+  }
+
   public BlackOnDemandValueIterator(Explorer<S, M> explorer, UnboundedValues values, RewardGenerator<S> rewardGenerator,
                                     int revisitThreshold, double rMax, double pMin, double errorTolerance,
                                     Double2LongFunction nSampleFunction, double precision, long numberOfTransitions,
@@ -85,7 +96,8 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
     this.deltaTCalculationMethod = deltaTCalculationMethod;
     this.maxSuccessorsInModel = maxSuccessorsInModel;
     this.transitionProbabilityMethod = transitionProbabilityMethod;
-    if (transitionProbabilityMethod == TransitionProbabilityMethod.Martingale) {
+    if (transitionProbabilityMethod == TransitionProbabilityMethod.Martingale
+            || transitionProbabilityMethod == TransitionProbabilityMethod.Bernstein) {
       this.transDelta = errorTolerance / numberOfTransitions;
     }
     this.aggregationCount = aggregationCount;
@@ -108,7 +120,7 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
         return new Pair<>(Math.max(0.0, probability - confidenceWidth),
                 Math.min(1.0, probability + confidenceWidth));
       });
-    } else {
+    } else if (transitionProbabilityMethod == TransitionProbabilityMethod.Martingale) {
       confidenceWidthFunction = state -> (action -> nextState -> {
         if (action >= explorer.getChoices(state).size()) {
           return new Pair<>(-1.0, -1.0);
@@ -136,6 +148,44 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
           return new Pair<>(1 - confidence.second, 1 - confidence.first);
         }
         return new Pair<>(0.0, 1.0);
+      });
+    } else {
+      confidenceWidthFunction = state -> (action -> nextState -> {
+        if (action >= explorer.getChoices(state).size()) {
+          return new Pair<>(-1.0, -1.0);
+        }
+
+        HashMap<Integer, BernsteinActionStats> actions = bernsteinTransitionCount.get(state);
+        if (actions == null) {
+          return new Pair<>(0.0, 1.0);
+        }
+
+        BernsteinActionStats actionStats = actions.get(action);
+        if (actionStats == null || !actionStats.transitions.containsKey(nextState)) {
+          return new Pair<>(0.0, 1.0);
+        }
+
+        BernsteinTransitionStats transitionStats = actionStats.transitions.get(nextState);
+        long stateActionCount = 0;
+        for (BernsteinTransitionStats nextStateStats : actionStats.transitions.values()) {
+          stateActionCount += nextStateStats.count;
+        }
+
+        double z = (double) transitionStats.count / (double) stateActionCount;
+        if (stateActionCount > transitionStats.lastUpdatedAt) {
+          transitionStats.varianceProxy += (1 - actionStats.previousEstimate)
+                  * (1 - actionStats.previousEstimate);
+          transitionStats.lastUpdatedAt = stateActionCount;
+          actionStats.previousEstimate = z;
+        }
+
+        double sigma = transDelta;
+        double L = Math.log(Math.log(2.0 * Math.max(transitionStats.varianceProxy, 1.0)));
+        double diff = (1.7 * Math.sqrt(Math.max(transitionStats.varianceProxy, 1.0) * (L
+                + (1.0 / 1.4) * Math.log(2 / sigma) + 1.18))
+                + 2.42 * Math.log(2 / sigma) + 3.38 * L + 3.98)
+                / (double) stateActionCount;
+        return new Pair<>(Math.max(0.0, z - diff), Math.min(1.0, z + diff));
       });
     }
 
@@ -207,6 +257,16 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
         }
       }
     );
+  }
+
+  public void updateBernsteinTransitions(int currentState, int actionIndex, int nextState) {
+    bernsteinTransitionCount.putIfAbsent(currentState, new HashMap<>());
+    HashMap<Integer, BernsteinActionStats> actions = bernsteinTransitionCount.get(currentState);
+
+    actions.putIfAbsent(actionIndex, new BernsteinActionStats());
+    BernsteinActionStats actionStats = actions.get(actionIndex);
+    actionStats.transitions.putIfAbsent(nextState, new BernsteinTransitionStats());
+    actionStats.transitions.get(nextState).count++;
   }
 
   @Override
@@ -292,9 +352,11 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
           // Hence, we know that there might be new MECs in the model and it could be worthwhile finding them again.
           seenNewTransitionSignificantly |= explorer.updateCounts(currentState, nextActionIndex, nextState);
 
-          // update distribution to compute martingale
+          // Update transition-confidence state for methods that maintain their own estimates.
           if (transitionProbabilityMethod == TransitionProbabilityMethod.Martingale) {
             updateMartingaleTransitions(currentState, nextActionIndex, nextState);
+          } else if (transitionProbabilityMethod == TransitionProbabilityMethod.Bernstein) {
+            updateBernsteinTransitions(currentState, nextActionIndex, nextState);
           }
         }
         totalTransitionsSimulated++;

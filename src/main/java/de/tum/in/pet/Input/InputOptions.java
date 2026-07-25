@@ -22,7 +22,7 @@ public class InputOptions {
     public static Option errorToleranceOption = new Option(null, "errorTolerance", true, "Error tolerance for blackbox exploration.");
     public static Option iterationSamplesOption =  new Option(null, "iterSamples", true, "Number of sample paths to be generated per episodic run.");
     public static Option updateMethodOption = new Option(null, "updateMethod", true, "Update method to be used (greybox/blackbox)");
-    public static Option transitionProbabilityMethodOption = new Option(null, "transitionProbabilityMethod", true, "Transition probability confidence method to be used (Hoeffding/Martingale)");
+    public static Option transitionProbabilityMethodOption = new Option(null, "transitionProbabilityMethod", true, "Transition probability confidence method to be used (Hoeffding/Martingale/Bernstein)");
     public static Option timeoutOption = new Option(null, "timeout", true, "Time before experiment forcefully terminates");
     public static Option getErrorProbabilityOption = new Option(null, "getErrorProbability", false, "Computes the error probability for blackbox with greybox equations");
     public static Option solveWithQP = new Option(null, "qp", false, "Solve using linear/quadratic programming");
