@@ -255,4 +255,4 @@ module host0
 	
 endmodule
 
-
+label "target" = (l=4 & ip=1);

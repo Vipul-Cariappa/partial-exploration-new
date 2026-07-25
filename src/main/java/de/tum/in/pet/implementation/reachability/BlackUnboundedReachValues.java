@@ -203,11 +203,17 @@ public class BlackUnboundedReachValues extends UnboundedReachValues{
 
     List<Pair<Integer, Integer>> bestLeavingActionStatePair = this.getBestLeavingAction(states, choiceFunction);
 
-    int actionState = bestLeavingActionStatePair.get(0).first;
-    int actionIndex = bestLeavingActionStatePair.get(0).second;
-    Distribution distribution = choiceFunction.get(actionState).get(actionIndex);
-    double newUpperBound = successorBounds(actionState, distribution,
-            confidenceWidthFunction.get(actionState).get(actionIndex)).upperBound();
+    double newUpperBound;
+    if (bestLeavingActionStatePair.isEmpty()) {
+      newUpperBound = 0;
+    }
+    else {
+      int actionState = bestLeavingActionStatePair.get(0).first;
+      int actionIndex = bestLeavingActionStatePair.get(0).second;
+      Distribution distribution = choiceFunction.get(actionState).get(actionIndex);
+      newUpperBound = successorBounds(actionState, distribution,
+          confidenceWidthFunction.get(actionState).get(actionIndex)).upperBound();
+    }
 
     for (int state: states){
       if (upperBound(state)>newUpperBound) {

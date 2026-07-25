@@ -24,4 +24,5 @@ label "target" = s>=9;
 
 rewards
 	//  define rewards here in format [action] (s=x)
+	// (s >= 9) : 1;
 endrewards

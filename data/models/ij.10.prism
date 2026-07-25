@@ -40,6 +40,8 @@ module process8 = process1 [ q1=q8, q2=q9, q3=q10, q4=q1, q5=q2, q6=q3, q7=q4, q
 module process9 = process1 [ q1=q9, q2=q10, q3=q1, q4=q2, q5=q3, q6=q4, q7=q5, q8=q6, q9=q7, q10=q8] endmodule
 module process10 = process1 [ q1=q10, q2=q1, q3=q2, q4=q3, q5=q4, q6=q5, q7=q6, q8=q7, q9=q8, q10=q9] endmodule
 
+label "target" = (q1+q2+q3+q4+q5+q6+q7+q8+q9+q10 = 1);
+
 rewards
     (q1+q2+q3+q4+q5+q6+q7+q8+q9+q10 = 1): 1;
 endrewards

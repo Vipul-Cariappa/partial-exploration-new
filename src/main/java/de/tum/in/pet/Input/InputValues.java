@@ -28,6 +28,7 @@ public class InputValues {
     public final String outputPath;
     public final int maxSuccessorsInModel;
     public final DeltaTCalculationMethod deltaTCalculationMethod;
+    public final String targetLabel;
 
 
     public InputValues(double precision, int revisitThreshold, double maxReward, double pMin, double errorTolerance,
@@ -35,7 +36,7 @@ public class InputValues {
                        InformationLevel informationLevel, UpdateMethod updateMethod,
                        TransitionProbabilityMethod transitionProbabilityMethod, String rewardStructure, boolean solveUsingQP,
                        SimulateMec simulateMec, String outputPath, int maxSuccessorsInModel, DeltaTCalculationMethod deltaTCalculationMethod,
-                       long numberOfTransitions, int aggregationCount) {
+                       long numberOfTransitions, int aggregationCount, String targetLabel) {
         this.precision = precision;
         this.revisitThreshold = revisitThreshold;
         this.maxReward = maxReward;
@@ -56,5 +57,6 @@ public class InputValues {
         this.deltaTCalculationMethod = deltaTCalculationMethod;
         this.numberOfTransitions = numberOfTransitions;
         this.aggregationCount = aggregationCount;
+        this.targetLabel = targetLabel;
     }
 }

@@ -26,6 +26,8 @@ endmodule
 module process2 = process1 [ q1=q2, q2=q3, q3=q1 ] endmodule
 module process3 = process1 [ q1=q3, q2=q1, q3=q2 ] endmodule
 
+label "target" = ((q1 + q2 + q3) = 1);
+
 rewards
     ((q1 + q2 + q3) = 1) : 1;
 endrewards

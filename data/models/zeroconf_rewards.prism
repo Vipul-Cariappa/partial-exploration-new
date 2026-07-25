@@ -263,6 +263,8 @@ const double err = 1; // cost associated with using a IP address already in use
 
 // [send] l=3 & mess=0 & y=CONSEC & probes=1 & ip=1 : err;
 
+label "target" = (l=4 & ip=1);
+
 rewards "reach"
 	l=4 : 1;
 endrewards

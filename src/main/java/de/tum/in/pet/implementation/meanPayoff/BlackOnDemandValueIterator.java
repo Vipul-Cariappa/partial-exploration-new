@@ -19,6 +19,7 @@ import prism.Pair;
 import prism.PrismException;
 
 import java.util.*;
+import java.util.function.IntPredicate;
 import java.util.logging.Level;
 
 import static de.tum.in.probmodels.util.Util.isZero;
@@ -50,6 +51,8 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
   private final int maxSuccessorsInModel;
   private final DeltaTCalculationMethod deltaTCalculationMethod;
   private final TransitionProbabilityMethod transitionProbabilityMethod;
+  private final IntPredicate target;
+  private final boolean runAsReachChecker;
 
   protected static final double initialNSamples = 1e4;
   protected static final double multiplicativeFactor = 5;
@@ -86,7 +89,8 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
                                     Double2LongFunction nSampleFunction, double precision, long numberOfTransitions,
                                     int aggregationCount, long timeout, boolean getErrorProbability, SimulateMec simulateMec,
                                     DeltaTCalculationMethod deltaTCalculationMethod, int maxSuccessorsInModel,
-                                    TransitionProbabilityMethod transitionProbabilityMethod) {
+                                    TransitionProbabilityMethod transitionProbabilityMethod, IntPredicate target,
+                                    boolean runAsReachChecker) {
     super(explorer, values, rewardGenerator, revisitThreshold, rMax, precision, timeout);
     this.pMin = pMin;
     this.errorTolerance = errorTolerance;
@@ -96,6 +100,8 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
     this.deltaTCalculationMethod = deltaTCalculationMethod;
     this.maxSuccessorsInModel = maxSuccessorsInModel;
     this.transitionProbabilityMethod = transitionProbabilityMethod;
+    this.target = target;
+    this.runAsReachChecker = runAsReachChecker;
     if (transitionProbabilityMethod == TransitionProbabilityMethod.Martingale
             || transitionProbabilityMethod == TransitionProbabilityMethod.Bernstein) {
       this.transDelta = errorTolerance / numberOfTransitions;
@@ -191,7 +197,9 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
 
     // Updates the confidence width function in UnboundedReachValues.
     blackValues.setConfidenceWidthFunction(confidenceWidthFunction);
-    initSinkStates();
+    if (!runAsReachChecker) {
+      initSinkStates();
+    }
   }
 
   @Override
@@ -299,7 +307,7 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
         stateVisitCounts.addTo(currentState, 1);
 
         // checks plus state,minus state and uncertain state
-        if (BoundedMecQuotient.isSinkState(currentState)) {
+        if (!runAsReachChecker && BoundedMecQuotient.isSinkState(currentState)) {
           visitStack.removeInt(visitStack.size() - 1);
           // We update the MEC reward bounds through running VI if we reach the uncertain or the plus state. This is
           // slightly different from the version in CAV'17 where VI is only run when the uncertain state is reached.
@@ -319,6 +327,10 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
           explore(currentState);  // action choices etc. are populated in the partial model. The bounds of currentState are also initialised.
         }
 
+        if (runAsReachChecker && target.test(currentState)) {
+            break;
+        }
+
         List<Distribution> choices = choices(currentState);
         if (choices.isEmpty()){
           break;
@@ -331,6 +343,11 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
           Pair<Integer, Integer> bestStateActionPairs = getSampledBestLeavingAction(currentState);
           currentState = bestStateActionPairs.first;
           nextActionIndex = bestStateActionPairs.second;
+          if (runAsReachChecker && currentState == -1) {
+            // we do not have any of the augmented s+, s- & s? states
+            // therefore there maynot be an action that exits the given MEC
+            break;
+          }
           choices = choices(currentState);
         }
         else {
@@ -342,7 +359,7 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
         // If the sampled action's index is the last index and state is a part of an mec, then this index of a stay action.
         // Here, we simply sample the next state. However, if we don't have a stay action, we have to call the explorer to
         // sample the next state according to the real distributions.
-        if (nextActionIndex == choices.size()-1 && stateToMecMap.containsKey(currentState)){
+        if (!runAsReachChecker && nextActionIndex == choices.size() - 1 && stateToMecMap.containsKey(currentState)) {
           nextState = choices.get(nextActionIndex).sample();
           stayActionCounts.put(stateToMecMap.get(currentState), stayActionCounts.get(stateToMecMap.get(currentState))+1);
         }
@@ -373,6 +390,9 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
 
     if (transitionProbabilityMethod == TransitionProbabilityMethod.Hoeffding) {
       values.resetBounds();
+      if (!runAsReachChecker) {
+        initSinkStates();
+      }
     }
 
     // the update function is ran until there has been some progress, i.e., the upper bounds of some state have been changed.
@@ -411,6 +431,9 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
     int mecIndex = stateToMecMap.get(currentState);
     NatBitSet mecStates = this.mecs.get(mecIndex);
     List<Pair<Integer, Integer>> bestActionStatePairs = values.getBestLeavingAction(mecStates, this::choices);
+    if (runAsReachChecker && bestActionStatePairs.isEmpty()) {
+      return new Pair<Integer,Integer>(-1, -1);
+    }
     int sampledActionIndex = randomIntegerSampler.nextInt(bestActionStatePairs.size());
     return bestActionStatePairs.get(sampledActionIndex);
   }
@@ -626,14 +649,14 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
     }
 
     // This deflates the values of the states of the new mecs. Further, the stay action is added here.
-
-    for(int i: changedMecs){
-
-      // We need to run VI on the MEC again to account for the following case. It can be that the bounds on the MEC are
-      // already very precise. Thus, the probability of reaching the uncertain state would be very small and we may
-      // never be able to run VI on the newly added states again. Thus, we need to run VI straight after adding new
-      // states.
-      updateMec(i);
+    if (!runAsReachChecker) {
+      for(int i: changedMecs){
+        // We need to run VI on the MEC again to account for the following case. It can be that the bounds on the MEC are
+        // already very precise. Thus, the probability of reaching the uncertain state would be very small and we may
+        // never be able to run VI on the newly added states again. Thus, we need to run VI straight after adding new
+        // states.
+        updateMec(i);
+      }
     }
 
     explorer.deactivateActionCountFilter();
@@ -754,7 +777,7 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
     assert !BoundedMecQuotient.isSinkState(state);
 
     List<Distribution> choices = new ArrayList<>(explorer.getChoices(state));
-    if (stateToMecMap.containsKey(state)) {
+    if (!runAsReachChecker && stateToMecMap.containsKey(state)) {
       choices.add(stayActionMap.get(stateToMecMap.get(state)));
     }
     return choices;

@@ -120,11 +120,6 @@ public class OnDemandValueIterator<S, M extends Model> implements Iterator<S, M>
    * Run OnDemandVI Algorithm.
    */
   public void run() throws PrismException {
-
-    initSinkStates();
-
-    logger.log(Level.INFO, "Initialized Sink States.");
-
     int run = 1;
 
     int initialState = explorer.initialStates().stream().findFirst().orElse(-1);
