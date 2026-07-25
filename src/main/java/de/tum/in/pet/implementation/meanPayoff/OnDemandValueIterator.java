@@ -125,7 +125,7 @@ public class OnDemandValueIterator<S, M extends Model> implements Iterator<S, M>
 
     logger.log(Level.INFO, "Initialized Sink States.");
 
-    int run = 0;
+    int run = 1;
 
     int initialState = explorer.initialStates().stream().findFirst().orElse(-1);
     assert initialState!=-1: "Explorer has no initial state";
