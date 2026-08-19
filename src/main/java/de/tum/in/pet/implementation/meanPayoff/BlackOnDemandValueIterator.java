@@ -57,6 +57,8 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
   protected static final double initialNSamples = 1e4;
   protected static final double multiplicativeFactor = 5;
 
+  protected Int2ObjectFunction<Int2ObjectFunction<Int2ObjectFunction<Pair<Double, Double>>>> confidenceWidthFunction;
+
 
   protected HashMap<Integer, HashMap<Integer, MartingaleActionStats>> martingaleTransitionCount =
           new HashMap<>();
@@ -115,7 +117,6 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
     // returns the confidenceWidth for a state x and an action with index y. if y is greater than the number of choices
     // the explorer holds, it must be the stay action. We set confidence width of stay action equal to zero as we
     // know the probabilities of the action are accurate as they have been calculated and not learned.
-    Int2ObjectFunction<Int2ObjectFunction<Int2ObjectFunction<Pair<Double, Double>>>> confidenceWidthFunction;
     if (transitionProbabilityMethod == TransitionProbabilityMethod.Hoeffding) {
       confidenceWidthFunction = state -> (action -> nextState -> {
         if (action >= explorer.getChoices(state).size()) {
@@ -197,6 +198,7 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
 
     // Updates the confidence width function in UnboundedReachValues.
     blackValues.setConfidenceWidthFunction(confidenceWidthFunction);
+    explorer_.setConfidenceWidthFunction(confidenceWidthFunction);
     if (!runAsReachChecker) {
       initSinkStates();
     }
@@ -389,6 +391,7 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
     handleComponents();
 
     if (transitionProbabilityMethod == TransitionProbabilityMethod.Hoeffding) {
+      // we reset the bounds because we are dynamically changing transDelta
       values.resetBounds();
       if (!runAsReachChecker) {
         initSinkStates();
@@ -561,9 +564,9 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
     // lower bound value. Thus, we can use the previously computer lower bound value for slightly faster convergence.
     scaledBounds = scaledBounds.withLower(Math.max(scaledBounds.lowerBound(), mecBounds.lowerBound()));
 
-
-    updateStayAction(mecIndex, scaledBounds);
-
+    if (!runAsReachChecker) {
+      updateStayAction(mecIndex, scaledBounds);
+    }
   }
 
   private double computeNSamples(Mec mec) {
@@ -649,14 +652,12 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
     }
 
     // This deflates the values of the states of the new mecs. Further, the stay action is added here.
-    if (!runAsReachChecker) {
-      for(int i: changedMecs){
-        // We need to run VI on the MEC again to account for the following case. It can be that the bounds on the MEC are
-        // already very precise. Thus, the probability of reaching the uncertain state would be very small and we may
-        // never be able to run VI on the newly added states again. Thus, we need to run VI straight after adding new
-        // states.
-        updateMec(i);
-      }
+    for(int i: changedMecs){
+      // We need to run VI on the MEC again to account for the following case. It can be that the bounds on the MEC are
+      // already very precise. Thus, the probability of reaching the uncertain state would be very small and we may
+      // never be able to run VI on the newly added states again. Thus, we need to run VI straight after adding new
+      // states.
+      updateMec(i);
     }
 
     explorer.deactivateActionCountFilter();
