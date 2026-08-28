@@ -133,7 +133,7 @@ public class CTMDPBlackOnDemandValueIterator<S, M extends Model> extends OnDeman
                     // that we don't get value that is more precise than what is required.
                     if (BoundedMecQuotient.isUncertainState(currentState) || BoundedMecQuotient.isPlusState(currentState)) {
                         int mecIndex = stateToMecMap.get(prevState);
-                        explorer.activateActionCountFilter();
+                        explorer.activateActionCountFilter(false);
                         updateMec(mecIndex);
                         explorer.deactivateActionCountFilter();
                     }
@@ -478,7 +478,7 @@ public class CTMDPBlackOnDemandValueIterator<S, M extends Model> extends OnDeman
 
         // activate the action count filter. Now explorer.model() only contains those actions that have been sampled
         // requiredSamples number of times. (Refer to Algorithm 3 in CAV'19). Now we can get a delta-sure EC.
-        explorer.activateActionCountFilter();
+        explorer.activateActionCountFilter(false);
         List<NatBitSet> newComponents = mecAnalyser.findComponents(explorer.model(), states);  // find all MECs in the partial model.
 
         // if no new components have been found, we clear all mec info that has been computed until now.

@@ -53,6 +53,7 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
   private final TransitionProbabilityMethod transitionProbabilityMethod;
   private final IntPredicate target;
   private final boolean runAsReachChecker;
+  private final double numberOfTransitions;
 
   protected static final double initialNSamples = 1e4;
   protected static final double multiplicativeFactor = 5;
@@ -104,8 +105,8 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
     this.transitionProbabilityMethod = transitionProbabilityMethod;
     this.target = target;
     this.runAsReachChecker = runAsReachChecker;
-    if (transitionProbabilityMethod == TransitionProbabilityMethod.Martingale
-            || transitionProbabilityMethod == TransitionProbabilityMethod.Bernstein) {
+    this.numberOfTransitions = numberOfTransitions;
+    if (transitionProbabilityMethod != TransitionProbabilityMethod.HoeffdingCAV19) {
       this.transDelta = errorTolerance / numberOfTransitions;
     }
     this.aggregationCount = aggregationCount;
@@ -117,12 +118,14 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
     // returns the confidenceWidth for a state x and an action with index y. if y is greater than the number of choices
     // the explorer holds, it must be the stay action. We set confidence width of stay action equal to zero as we
     // know the probabilities of the action are accurate as they have been calculated and not learned.
-    if (transitionProbabilityMethod == TransitionProbabilityMethod.Hoeffding) {
+    Int2ObjectFunction<Int2ObjectFunction<Int2ObjectFunction<Pair<Double, Double>>>> confidenceWidthFunction;
+    if (transitionProbabilityMethod == TransitionProbabilityMethod.Hoeffding
+            || transitionProbabilityMethod == TransitionProbabilityMethod.HoeffdingCAV19) {
       confidenceWidthFunction = state -> (action -> nextState -> {
         if (action >= explorer.getChoices(state).size()) {
           return new Pair<>(-1.0, -1.0);
         }
-        double confidenceWidth = Math.sqrt(-Math.log(transDelta) / (2 * explorer_.getActionCounts(state, action)));
+        double confidenceWidth = Math.sqrt(-Math.log(this.transDelta) / (2 * explorer_.getActionCounts(state, action)));
         double probability = explorer.getChoices(state).get(action).get(nextState);
         return new Pair<>(Math.max(0.0, probability - confidenceWidth),
                 Math.min(1.0, probability + confidenceWidth));
@@ -284,7 +287,8 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
 
     BlackExplorer<S, M> explorer = (BlackExplorer<S, M>) explorer();
 
-    if (transitionProbabilityMethod == TransitionProbabilityMethod.Hoeffding) {
+    if (transitionProbabilityMethod == TransitionProbabilityMethod.Hoeffding
+            || transitionProbabilityMethod == TransitionProbabilityMethod.HoeffdingCAV19) {
       computeDeltaT(explorer, errorTolerance, run);
     } else {
       explorer.updateCountParams(transDelta, pMin);
@@ -318,7 +322,7 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
           // that we don't get value that is more precise than what is required.
           if (BoundedMecQuotient.isUncertainState(currentState)||BoundedMecQuotient.isPlusState(currentState)) {
             int mecIndex = stateToMecMap.get(visitStack.removeInt(visitStack.size() - 1));
-            explorer.activateActionCountFilter();
+            explorer.activateActionCountFilter(transitionProbabilityMethod == TransitionProbabilityMethod.HoeffdingCAV19);
             updateMec(mecIndex);
             explorer.deactivateActionCountFilter();
           }
@@ -369,7 +373,11 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
           nextState = explorer.simulateAction(currentState, nextActionIndex);
           // If this action has been sampled enough number of times, we know that it can now be considered as a part of an MEC.
           // Hence, we know that there might be new MECs in the model and it could be worthwhile finding them again.
-          seenNewTransitionSignificantly |= explorer.updateCounts(currentState, nextActionIndex, nextState);
+          if (transitionProbabilityMethod == TransitionProbabilityMethod.HoeffdingCAV19) {
+            seenNewTransitionSignificantly |= explorer.updateCountsCAV19(currentState, nextActionIndex, nextState);
+          } else {
+            seenNewTransitionSignificantly |= explorer.updateCounts(currentState, nextActionIndex, nextState);
+          }
 
           // Update transition-confidence state for methods that maintain their own estimates.
           if (transitionProbabilityMethod == TransitionProbabilityMethod.Martingale) {
@@ -390,7 +398,7 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
 
     handleComponents();
 
-    if (transitionProbabilityMethod == TransitionProbabilityMethod.Hoeffding) {
+    if (transitionProbabilityMethod == TransitionProbabilityMethod.HoeffdingCAV19) {
       // we reset the bounds because we are dynamically changing transDelta
       values.resetBounds();
       if (!runAsReachChecker) {
@@ -413,17 +421,23 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
   }
 
   private void computeDeltaT(BlackExplorer<S, M> explorer, double errorTolerance, int run) {
-    switch (deltaTCalculationMethod) {
-      case P_MIN:
-        transDelta = errorTolerance *pMin/ explorer.getNumExploredActions();
-        break;
+    double k = 0;
+    if (transitionProbabilityMethod == TransitionProbabilityMethod.HoeffdingCAV19) {
+      switch (deltaTCalculationMethod) {
+        case P_MIN:
+          transDelta = errorTolerance * pMin / explorer.getNumExploredActions();
+          break;
 
-      case MAX_SUCCESSORS:
-        transDelta = errorTolerance / (explorer.getNumExploredActions() * maxSuccessorsInModel);
-        break;
+        case MAX_SUCCESSORS:
+          transDelta = errorTolerance / (explorer.getNumExploredActions() * maxSuccessorsInModel);
+          break;
+      }
+      k = 1 / Math.pow(2, run);
+    } else {
+      transDelta = errorTolerance / numberOfTransitions;
+      k = (6 / Math.pow(Math.PI, 2)) * (1 / Math.pow(run, 2));
     }
-    double series = (6 / Math.pow(Math.PI, 2)) * (1 / Math.pow(run, 2));
-    transDelta = transDelta * series;
+    transDelta = transDelta * k;
     explorer.updateCountParams(transDelta, pMin);
   }
 
@@ -613,10 +627,10 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
   }
 
   @Override
-  public void handleComponents(){
+  public void handleComponents() {
 
     // if no new transition has been seen significantly, don't compute mecs.
-    if(!shouldHandleComponents()){
+    if (!shouldHandleComponents()) {
       return;
     }
 
@@ -629,7 +643,7 @@ public class BlackOnDemandValueIterator<S, M extends Model> extends OnDemandValu
 
     // activate the action count filter. Now explorer.model() only contains those actions that have been sampled
     // requiredSamples number of times. (Refer to Algorithm 3 in CAV'19). Now we can get a delta-sure EC.
-    explorer.activateActionCountFilter();
+    explorer.activateActionCountFilter(transitionProbabilityMethod == TransitionProbabilityMethod.HoeffdingCAV19);
     List<NatBitSet> newComponents = mecAnalyser.findComponents(explorer.model(), states);  // find all MECs in the partial model.
 
     // if no new components have been found, we clear all mec info that has been computed until now.

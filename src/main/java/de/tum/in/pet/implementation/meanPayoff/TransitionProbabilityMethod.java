@@ -1,5 +1,5 @@
 package de.tum.in.pet.implementation.meanPayoff;
 
 public enum TransitionProbabilityMethod {
-  Hoeffding, Martingale, Bernstein;
+  Hoeffding, HoeffdingCAV19, Martingale, Bernstein;
 }
